@@ -1,9 +1,16 @@
-import { View, Image, FlatList, StyleSheet, TouchableOpacity, Dimensions } from "react-native";
-import { useState, useEffect } from "react";
+import {
+  View,
+  Image,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+} from 'react-native';
+import { useState, useEffect } from 'react';
 import * as FileSystem from 'expo-file-system';
-import { Ionicons } from "@expo/vector-icons";
-import { APP_DIRECTORY } from "../constants";
-import ImageView from "./ImageView";
+import { Ionicons } from '@expo/vector-icons';
+import { APP_DIRECTORY } from '../constants';
+import ImageView from './ImageView';
 
 interface GalleryViewProps {
   onClose: () => void;
@@ -19,9 +26,11 @@ export default function GalleryView({ onClose }: GalleryViewProps) {
 
   async function loadPhotos() {
     try {
-      const files = await FileSystem.readDirectoryAsync(APP_DIRECTORY.SECRET_CAMERA);
-      const photoUris = files.map(filename => 
-        `${APP_DIRECTORY.SECRET_CAMERA}/${filename}`
+      const files = await FileSystem.readDirectoryAsync(
+        APP_DIRECTORY.SECRET_CAMERA
+      );
+      const photoUris = files.map(
+        (filename) => `${APP_DIRECTORY.SECRET_CAMERA}/${filename}`
       );
       setPhotos(photoUris.reverse()); // Most recent first
     } catch (error) {
@@ -35,10 +44,7 @@ export default function GalleryView({ onClose }: GalleryViewProps) {
 
   if (selectedPhoto) {
     return (
-      <ImageView
-        uri={selectedPhoto}
-        onClose={() => setSelectedPhoto(null)}
-      />
+      <ImageView uri={selectedPhoto} onClose={() => setSelectedPhoto(null)} />
     );
   }
 
@@ -47,12 +53,12 @@ export default function GalleryView({ onClose }: GalleryViewProps) {
       <TouchableOpacity style={styles.closeButton} onPress={onClose}>
         <Ionicons name="close" size={32} color="black" />
       </TouchableOpacity>
-      
+
       <FlatList
         data={photos}
         numColumns={numColumns}
         renderItem={({ item }) => (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.imageContainer}
             onPress={() => setSelectedPhoto(item)}
           >
@@ -62,7 +68,7 @@ export default function GalleryView({ onClose }: GalleryViewProps) {
             />
           </TouchableOpacity>
         )}
-        keyExtractor={item => item}
+        keyExtractor={(item) => item}
       />
     </View>
   );
@@ -83,4 +89,4 @@ const styles = StyleSheet.create({
   image: {
     borderRadius: 8,
   },
-}); 
+});

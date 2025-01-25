@@ -1,5 +1,12 @@
-import { View, Image, StyleSheet, TouchableOpacity, Share, Dimensions } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  View,
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  Share,
+  Dimensions,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 interface ImageViewProps {
   uri: string;
@@ -13,7 +20,7 @@ export default function ImageView({ uri, onClose }: ImageViewProps) {
   const handleShare = async () => {
     try {
       await Share.share({
-        url: uri // iOS
+        url: uri, // iOS
         // message: uri // Android
       });
     } catch (error) {
@@ -61,4 +68,4 @@ const styles = StyleSheet.create({
   iconButton: {
     padding: 10,
   },
-}); 
+});

@@ -1,5 +1,8 @@
 pre-commit:
   commands:
+    format:
+      glob: '*.{js,jsx,ts,tsx,json,md,yaml,yml}'
+      run: npx prettier --write {staged_files}
     lint:
-      glob: "*.{js,jsx,ts,tsx}"
+      glob: '*.{js,jsx,ts,tsx}'
       run: npm run lint

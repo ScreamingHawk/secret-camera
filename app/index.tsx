@@ -1,8 +1,8 @@
-import { Text, View, Button, StyleSheet } from "react-native";
-import { useState } from "react";
-import { useCameraPermissions } from "expo-camera";
-import CameraView from "./components/CameraView";
-import GalleryView from "./components/GalleryView";
+import { Text, View, Button, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { useCameraPermissions } from 'expo-camera';
+import CameraView from './components/CameraView';
+import GalleryView from './components/GalleryView';
 
 export default function Index() {
   const [permission, requestPermission] = useCameraPermissions();

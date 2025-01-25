@@ -1,9 +1,9 @@
-import { View, TouchableOpacity, StyleSheet } from "react-native";
-import { CameraView as ExpoCameraView, CameraType } from "expo-camera";
-import { useState, useRef, useEffect } from "react";
-import { Ionicons } from "@expo/vector-icons";
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { CameraView as ExpoCameraView, CameraType } from 'expo-camera';
+import { useState, useRef, useEffect } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
-import { APP_DIRECTORY } from "../constants";
+import { APP_DIRECTORY } from '../constants';
 
 interface CameraViewProps {
   onClose: () => void;
@@ -15,15 +15,19 @@ export default function CameraView({ onClose }: CameraViewProps) {
 
   useEffect(() => {
     (async () => {
-      const dirInfo = await FileSystem.getInfoAsync(APP_DIRECTORY.SECRET_CAMERA);
+      const dirInfo = await FileSystem.getInfoAsync(
+        APP_DIRECTORY.SECRET_CAMERA
+      );
       if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(APP_DIRECTORY.SECRET_CAMERA, { intermediates: true });
+        await FileSystem.makeDirectoryAsync(APP_DIRECTORY.SECRET_CAMERA, {
+          intermediates: true,
+        });
       }
     })();
   }, []);
 
   function toggleCameraFacing() {
-    setFacing(current => (current === 'back' ? 'front' : 'back'));
+    setFacing((current) => (current === 'back' ? 'front' : 'back'));
   }
 
   async function takePicture() {
@@ -33,14 +37,14 @@ export default function CameraView({ onClose }: CameraViewProps) {
         console.error('No photo captured');
         return;
       }
-      
+
       const filename = `photo_${Date.now()}.jpg`;
       const destination = `${APP_DIRECTORY.SECRET_CAMERA}/${filename}`;
-      
+
       try {
         await FileSystem.moveAsync({
           from: photo.uri,
-          to: destination
+          to: destination,
         });
         console.log('Photo saved to:', destination);
       } catch (error) {
@@ -50,16 +54,15 @@ export default function CameraView({ onClose }: CameraViewProps) {
   }
 
   return (
-    <ExpoCameraView 
-      ref={cameraRef}
-      style={styles.camera} 
-      facing={facing}
-    >
+    <ExpoCameraView ref={cameraRef} style={styles.camera} facing={facing}>
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.iconButton} onPress={toggleCameraFacing}>
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={toggleCameraFacing}
+        >
           <Ionicons name="camera-reverse" size={32} color="white" />
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.captureButton} onPress={takePicture}>
           <View style={styles.captureButtonInner} />
         </TouchableOpacity>
@@ -102,4 +105,4 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     backgroundColor: 'white',
   },
-}); 
+});
