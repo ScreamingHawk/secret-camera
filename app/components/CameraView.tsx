@@ -3,6 +3,7 @@ import { CameraView as ExpoCameraView, CameraType } from "expo-camera";
 import { useState, useRef, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from 'expo-file-system';
+import { APP_DIRECTORY } from "../constants";
 
 interface CameraViewProps {
   onClose: () => void;
@@ -11,16 +12,15 @@ interface CameraViewProps {
 export default function CameraView({ onClose }: CameraViewProps) {
   const [facing, setFacing] = useState<CameraType>('back');
   const cameraRef = useRef<ExpoCameraView>(null);
-  const secretDir = `${FileSystem.documentDirectory}.secret-camera`;
 
   useEffect(() => {
     (async () => {
-      const dirInfo = await FileSystem.getInfoAsync(secretDir);
+      const dirInfo = await FileSystem.getInfoAsync(APP_DIRECTORY.SECRET_CAMERA);
       if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(secretDir, { intermediates: true });
+        await FileSystem.makeDirectoryAsync(APP_DIRECTORY.SECRET_CAMERA, { intermediates: true });
       }
     })();
-  }, [secretDir]);
+  }, []);
 
   function toggleCameraFacing() {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
@@ -35,7 +35,7 @@ export default function CameraView({ onClose }: CameraViewProps) {
       }
       
       const filename = `photo_${Date.now()}.jpg`;
-      const destination = `${secretDir}/${filename}`;
+      const destination = `${APP_DIRECTORY.SECRET_CAMERA}/${filename}`;
       
       try {
         await FileSystem.moveAsync({

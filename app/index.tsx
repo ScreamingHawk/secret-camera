@@ -2,10 +2,12 @@ import { Text, View, Button, StyleSheet } from "react-native";
 import { useState } from "react";
 import { useCameraPermissions } from "expo-camera";
 import CameraView from "./components/CameraView";
+import GalleryView from "./components/GalleryView";
 
 export default function Index() {
   const [permission, requestPermission] = useCameraPermissions();
   const [showCamera, setShowCamera] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
 
   if (!permission) {
     // Camera permissions are still loading
@@ -28,9 +30,17 @@ export default function Index() {
     return <CameraView onClose={() => setShowCamera(false)} />;
   }
 
+  if (showGallery) {
+    return <GalleryView onClose={() => setShowGallery(false)} />;
+  }
+
   return (
     <View style={styles.container}>
-      <Button title="Open Camera" onPress={() => setShowCamera(true)} />
+      <View style={styles.buttonContainer}>
+        <Button title="Open Camera" onPress={() => setShowCamera(true)} />
+        <View style={styles.buttonSpacing} />
+        <Button title="View Gallery" onPress={() => setShowGallery(true)} />
+      </View>
     </View>
   );
 }
@@ -44,5 +54,11 @@ const styles = StyleSheet.create({
   message: {
     textAlign: 'center',
     paddingBottom: 10,
+  },
+  buttonContainer: {
+    alignItems: 'center',
+  },
+  buttonSpacing: {
+    height: 20,
   },
 });
