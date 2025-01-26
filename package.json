@@ -11,7 +11,7 @@
     "test": "jest --watchAll",
     "lint": "expo lint",
     "format": "prettier --write .",
-    "postinstall": "npx lefthook install"
+    "prepare-dev": "npx lefthook install"
   },
   "jest": {
     "preset": "jest-expo"

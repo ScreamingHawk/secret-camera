@@ -1,50 +1,63 @@
-# Welcome to your Expo app 👋
+# Secret Camera App 📸
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A secure camera application built with Expo that allows you to take and store photos in a private directory.
 
-## Get started
+## Features
 
-1. Install dependencies
+- 📱 Take photos using front or back camera
+- 🔒 Store photos in a secure, private directory
+- 🖼️ View photos in a gallery interface
+- 📤 Share photos directly from the viewer
+- 📱 Cross-platform support for iOS and Android
+
+## Getting Started
+
+1. Install dependencies and set up development environment
 
    ```bash
    npm install
+   npm run prepare-dev
    ```
 
-2. Start the app
+2. Start the development server
 
    ```bash
-    npx expo start
+   npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+3. Launch the app on your preferred platform:
+   - Android (tested)
+   - iOS (untested)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Required Permissions
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+The app requires the following permissions:
 
-## Get a fresh project
+- Camera access
+- Microphone access (for future video support)
 
-When you're ready, run:
+## Development
 
-```bash
-npm run reset-project
-```
+- `npm start` - Start the Expo development server
+- `npm run android` - Start for Android
+- `npm run ios` - Start for iOS (untested)
+- `npm run web` - Start for web
+- `npm run lint` - Run ESLint
+- `npm run format` - Format code with Prettier
+- `npm run prepare-dev` - Set up git hooks for development
+- `npm test` - Run tests
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Contributing
 
-## Learn more
+1. Ensure you have the latest dependencies installed
+2. Make your changes
+3. Run the linter and formatter:
+   ```bash
+   npm run lint
+   npm run format
+   ```
+4. Submit your pull request
 
-To learn more about developing your project with Expo, look at the following resources:
+## License
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
