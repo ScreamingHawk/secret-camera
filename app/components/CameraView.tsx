@@ -1,9 +1,10 @@
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { CameraView as ExpoCameraView, CameraType } from 'expo-camera';
-import { useState, useRef, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { CameraType, CameraView as ExpoCameraView } from 'expo-camera';
 import * as FileSystem from 'expo-file-system';
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { APP_DIRECTORY } from '../constants';
+import { savePhoto } from '../utils/security';
 
 interface CameraViewProps {
   onClose: () => void;
@@ -39,14 +40,9 @@ export default function CameraView({ onClose }: CameraViewProps) {
       }
 
       const filename = `photo_${Date.now()}.jpg`;
-      const destination = `${APP_DIRECTORY.SECRET_CAMERA}/${filename}`;
-
       try {
-        await FileSystem.moveAsync({
-          from: photo.uri,
-          to: destination,
-        });
-        console.log('Photo saved to:', destination);
+        await savePhoto(photo.uri, filename);
+        console.log('Photo saved successfully');
       } catch (error) {
         console.error('Error saving photo:', error);
       }

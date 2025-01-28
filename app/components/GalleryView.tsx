@@ -1,14 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system';
+import { useEffect, useState } from 'react';
 import {
-  View,
-  Image,
+  Dimensions,
   FlatList,
+  Image,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
+  View,
 } from 'react-native';
-import { useState, useEffect } from 'react';
-import * as FileSystem from 'expo-file-system';
-import { Ionicons } from '@expo/vector-icons';
 import { APP_DIRECTORY } from '../constants';
 import ImageView from './ImageView';
 
@@ -26,13 +26,17 @@ export default function GalleryView({ onClose }: GalleryViewProps) {
 
   async function loadPhotos() {
     try {
+      console.log(
+        'Loading photos from directory:',
+        APP_DIRECTORY.SECRET_CAMERA
+      );
       const files = await FileSystem.readDirectoryAsync(
         APP_DIRECTORY.SECRET_CAMERA
       );
       const photoUris = files.map(
         (filename) => `${APP_DIRECTORY.SECRET_CAMERA}/${filename}`
       );
-      setPhotos(photoUris.reverse()); // Most recent first
+      setPhotos(photoUris.reverse());
     } catch (error) {
       console.error('Error loading photos:', error);
     }
@@ -48,6 +52,28 @@ export default function GalleryView({ onClose }: GalleryViewProps) {
     );
   }
 
+  function GalleryItem({
+    item,
+    imageSize,
+    onSelect,
+  }: {
+    item: string;
+    imageSize: number;
+    onSelect: (uri: string) => void;
+  }) {
+    return (
+      <TouchableOpacity
+        style={styles.imageContainer}
+        onPress={() => onSelect(item)}
+      >
+        <Image
+          source={{ uri: item }}
+          style={[styles.image, { width: imageSize, height: imageSize }]}
+        />
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <TouchableOpacity style={styles.closeButton} onPress={onClose}>
@@ -58,15 +84,11 @@ export default function GalleryView({ onClose }: GalleryViewProps) {
         data={photos}
         numColumns={numColumns}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.imageContainer}
-            onPress={() => setSelectedPhoto(item)}
-          >
-            <Image
-              source={{ uri: item }}
-              style={[styles.image, { width: imageSize, height: imageSize }]}
-            />
-          </TouchableOpacity>
+          <GalleryItem
+            item={item}
+            imageSize={imageSize}
+            onSelect={setSelectedPhoto}
+          />
         )}
         keyExtractor={(item) => item}
       />

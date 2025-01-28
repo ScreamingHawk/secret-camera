@@ -4,6 +4,7 @@ A secure camera application built with Expo that allows you to take and store ph
 
 ## Features
 
+- 🔑 Biometric authentication (fingerprint or face)
 - 📱 Take photos using front or back camera
 - 🔒 Store photos in a secure, private directory
 - 🖼️ View photos in a gallery interface

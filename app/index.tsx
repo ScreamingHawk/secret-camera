@@ -1,13 +1,33 @@
 import { Text, View, Button, StyleSheet } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCameraPermissions } from 'expo-camera';
 import CameraView from './components/CameraView';
 import GalleryView from './components/GalleryView';
+import { authenticateUser } from './utils/security';
 
 export default function Index() {
   const [permission, requestPermission] = useCameraPermissions();
   const [showCamera, setShowCamera] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    authenticateUser().then(setIsAuthenticated);
+  }, []);
+
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.message}>
+          Please authenticate to access the app
+        </Text>
+        <Button
+          onPress={() => authenticateUser().then(setIsAuthenticated)}
+          title="Authenticate"
+        />
+      </View>
+    );
+  }
 
   if (!permission) {
     // Camera permissions are still loading
