@@ -1,12 +1,12 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as Sharing from 'expo-sharing';
 import {
-  View,
+  Dimensions,
   Image,
   StyleSheet,
   TouchableOpacity,
-  Share,
-  Dimensions,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
 interface ImageViewProps {
   uri: string;
@@ -19,9 +19,16 @@ export default function ImageView({ uri, onClose }: ImageViewProps) {
 
   const handleShare = async () => {
     try {
-      await Share.share({
-        url: uri, // iOS
-        // message: uri // Android
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        console.error('Sharing is not available on this platform');
+        return;
+      }
+
+      await Sharing.shareAsync(uri, {
+        dialogTitle: 'Share Image',
+        mimeType: 'image/jpeg',
+        UTI: 'public.jpeg',
       });
     } catch (error) {
       console.error('Error sharing image:', error);
