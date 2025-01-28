@@ -47,6 +47,13 @@ The app requires the following permissions:
 - `npm run prepare-dev` - Set up git hooks for development
 - `npm test` - Run tests
 
+### Release
+
+- `eas build -p android` - Build for Android
+- `eas build -p ios` - Build for iOS (untested)
+- `eas submit -p android` - Submit for Android
+- `eas submit -p ios` - Submit for iOS (untested)
+
 ## Contributing
 
 1. Ensure you have the latest dependencies installed
