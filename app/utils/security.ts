@@ -1,5 +1,5 @@
-import * as LocalAuthentication from 'expo-local-authentication';
 import * as FileSystem from 'expo-file-system';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { APP_DIRECTORY } from '../constants';
 
 export async function authenticateUser(): Promise<boolean> {

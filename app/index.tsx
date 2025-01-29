@@ -1,9 +1,9 @@
-import { Text, View, Button, StyleSheet, ScrollView } from 'react-native';
-import { useState, useEffect } from 'react';
 import { useCameraPermissions } from 'expo-camera';
+import { useEffect, useState } from 'react';
+import { Button, StyleSheet, Text, View } from 'react-native';
+import AboutView from './components/AboutView';
 import CameraView from './components/CameraView';
 import GalleryView from './components/GalleryView';
-import AboutView from './components/AboutView';
 import { authenticateUser } from './utils/security';
 
 export default function Index() {

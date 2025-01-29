@@ -1,10 +1,10 @@
 import {
+  Button,
+  Image,
+  ScrollView,
+  StyleSheet,
   Text,
   View,
-  Button,
-  StyleSheet,
-  ScrollView,
-  Image,
 } from 'react-native';
 
 interface AboutViewProps {
