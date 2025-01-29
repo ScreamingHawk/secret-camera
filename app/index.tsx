@@ -1,6 +1,13 @@
 import { useCameraPermissions } from 'expo-camera';
 import { useEffect, useState } from 'react';
-import { Button, StyleSheet, Text, View } from 'react-native';
+import {
+  Button,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import AboutView from './components/AboutView';
 import CameraView from './components/CameraView';
 import GalleryView from './components/GalleryView';
@@ -62,12 +69,33 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.buttonContainer}>
-        <Button title="Open Camera" onPress={() => setShowCamera(true)} />
-        <View style={styles.buttonSpacing} />
-        <Button title="View Gallery" onPress={() => setShowGallery(true)} />
-        <View style={styles.buttonSpacing} />
-        <Button title="About" onPress={() => setShowAbout(true)} />
+      <View style={styles.content}>
+        <Text style={styles.title}>Secret Camera</Text>
+        <Image
+          source={require('../assets/images/icon.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => setShowCamera(true)}
+          >
+            <Text style={styles.buttonText}>Open Camera</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => setShowGallery(true)}
+          >
+            <Text style={styles.buttonText}>View Gallery</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => setShowAbout(true)}
+          >
+            <Text style={styles.buttonText}>About</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -76,17 +104,57 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F5F6F7',
+  },
+  content: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#2C3E50',
+    marginBottom: 40,
+    textAlign: 'center',
   },
   message: {
     textAlign: 'center',
-    paddingBottom: 10,
+    paddingBottom: 20,
+    fontSize: 16,
+    color: '#34495E',
   },
   buttonContainer: {
-    alignItems: 'center',
+    width: '80%',
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 15,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    gap: 15, // Spacing between buttons
   },
-  buttonSpacing: {
-    height: 20,
+  button: {
+    backgroundColor: '#4A90E2',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  logo: {
+    width: 100,
+    height: 100,
+    marginBottom: 40,
   },
 });
