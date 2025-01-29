@@ -11,9 +11,10 @@ import {
 interface ImageViewProps {
   uri: string;
   onClose: () => void;
+  onDelete?: () => void;
 }
 
-export default function ImageView({ uri, onClose }: ImageViewProps) {
+export default function ImageView({ uri, onClose, onDelete }: ImageViewProps) {
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
 
@@ -46,9 +47,16 @@ export default function ImageView({ uri, onClose }: ImageViewProps) {
         <TouchableOpacity style={styles.iconButton} onPress={handleShare}>
           <Ionicons name="share-outline" size={32} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.iconButton} onPress={onClose}>
-          <Ionicons name="close" size={32} color="white" />
-        </TouchableOpacity>
+        <View style={styles.rightButtons}>
+          {onDelete && (
+            <TouchableOpacity style={styles.iconButton} onPress={onDelete}>
+              <Ionicons name="trash-outline" size={32} color="white" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.iconButton} onPress={onClose}>
+            <Ionicons name="close" size={32} color="white" />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -74,5 +82,9 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: 10,
+  },
+  rightButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });

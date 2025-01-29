@@ -42,13 +42,45 @@ export default function GalleryView({ onClose }: GalleryViewProps) {
     }
   }
 
+  async function handleDeleteImage(uri: string) {
+    try {
+      // Delete the file
+      await FileSystem.deleteAsync(uri);
+
+      // Update the photos state
+      const newPhotos = photos.filter((photo) => photo !== uri);
+      setPhotos(newPhotos);
+
+      // Handle navigation to next/previous photo
+      if (selectedPhoto === uri) {
+        const currentIndex = photos.indexOf(uri);
+        if (newPhotos.length === 0) {
+          // No more photos, close the image view
+          setSelectedPhoto(null);
+        } else if (currentIndex === photos.length - 1) {
+          // If we deleted the last photo, show the new last photo
+          setSelectedPhoto(newPhotos[newPhotos.length - 1]);
+        } else {
+          // Show the next photo
+          setSelectedPhoto(newPhotos[currentIndex]);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting image:', error);
+    }
+  }
+
   const numColumns = 3;
   const screenWidth = Dimensions.get('window').width;
   const imageSize = screenWidth / numColumns - 4;
 
   if (selectedPhoto) {
     return (
-      <ImageView uri={selectedPhoto} onClose={() => setSelectedPhoto(null)} />
+      <ImageView
+        uri={selectedPhoto}
+        onClose={() => setSelectedPhoto(null)}
+        onDelete={() => handleDeleteImage(selectedPhoto)}
+      />
     );
   }
 
