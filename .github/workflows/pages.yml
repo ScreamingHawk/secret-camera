@@ -32,16 +32,23 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Create docs directory
-        run: |
-          mkdir -p docs
-          cp README.md docs/index.md
-          cp PRIVACY.md docs/privacy.md
+      - name: Install Pandoc
+        run: sudo apt-get install -y pandoc
 
-      - name: Create Jekyll config
+      - name: Create clean docs directory
+        run: mkdir docs
+
+      - name: Convert Markdown to HTML
         run: |
-          echo "title: Secret Camera App" > docs/_config.yml
-          echo "theme: jekyll-theme-cayman" >> docs/_config.yml
+          # Convert README.md to index.html with a title
+          echo "<html><head><title>Secret Camera App</title></head><body>" > docs/index.html
+          pandoc README.md >> docs/index.html
+          echo "</body></html>" >> docs/index.html
+
+          # Convert PRIVACY.md to PRIVACY.html with a title
+          echo "<html><head><title>Privacy Policy - Secret Camera App</title></head><body>" > docs/PRIVACY.html
+          pandoc PRIVACY.md >> docs/PRIVACY.html
+          echo "</body></html>" >> docs/PRIVACY.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
