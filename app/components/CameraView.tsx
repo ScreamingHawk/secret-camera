@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraType, CameraView as ExpoCameraView } from 'expo-camera';
 import * as FileSystem from 'expo-file-system';
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { BackHandler, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { APP_DIRECTORY } from '../constants';
 import { savePhoto } from '../utils/security';
 
@@ -26,6 +26,18 @@ export default function CameraView({ onClose }: CameraViewProps) {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        onClose();
+        return true;
+      }
+    );
+
+    return () => backHandler.remove();
+  }, [onClose]);
 
   function toggleCameraFacing() {
     setFacing((current) => (current === 'back' ? 'front' : 'back'));

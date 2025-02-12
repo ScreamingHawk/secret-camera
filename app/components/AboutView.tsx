@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import {
+  BackHandler,
   Button,
   Image,
   ScrollView,
@@ -12,6 +14,18 @@ interface AboutViewProps {
 }
 
 export default function AboutView({ onClose }: AboutViewProps) {
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        onClose();
+        return true;
+      }
+    );
+
+    return () => backHandler.remove();
+  }, [onClose]);
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.aboutContainer}>

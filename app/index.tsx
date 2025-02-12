@@ -1,6 +1,7 @@
 import { useCameraPermissions } from 'expo-camera';
 import { useEffect, useState } from 'react';
 import {
+  BackHandler,
   Button,
   Image,
   StyleSheet,
@@ -23,6 +24,33 @@ export default function Index() {
   useEffect(() => {
     authenticateUser().then(setIsAuthenticated);
   }, []);
+
+  useEffect(() => {
+    const backAction = () => {
+      if (showCamera) {
+        setShowCamera(false);
+        return true;
+      }
+      if (showGallery) {
+        setShowGallery(false);
+        return true;
+      }
+      if (showAbout) {
+        setShowAbout(false);
+        return true;
+      }
+      // Exit app when on home screen
+      BackHandler.exitApp();
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [showCamera, showGallery, showAbout]);
 
   if (!isAuthenticated) {
     return (

@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
 import { useEffect, useState } from 'react';
 import {
+  BackHandler,
   Dimensions,
   FlatList,
   Image,
@@ -23,6 +24,22 @@ export default function GalleryView({ onClose }: GalleryViewProps) {
   useEffect(() => {
     loadPhotos();
   }, []);
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        if (selectedPhoto) {
+          setSelectedPhoto(null);
+        } else {
+          onClose();
+        }
+        return true;
+      }
+    );
+
+    return () => backHandler.remove();
+  }, [selectedPhoto, onClose]);
 
   async function loadPhotos() {
     try {
