@@ -92,11 +92,22 @@ export default function GalleryView({ onClose }: GalleryViewProps) {
   const imageSize = screenWidth / numColumns - 4;
 
   if (selectedPhoto) {
+    const currentIndex = photos.indexOf(selectedPhoto);
     return (
       <ImageView
         uri={selectedPhoto}
         onClose={() => setSelectedPhoto(null)}
         onDelete={() => handleDeleteImage(selectedPhoto)}
+        onNext={() => {
+          if (currentIndex < photos.length - 1) {
+            setSelectedPhoto(photos[currentIndex + 1]);
+          }
+        }}
+        onPrevious={() => {
+          if (currentIndex > 0) {
+            setSelectedPhoto(photos[currentIndex - 1]);
+          }
+        }}
       />
     );
   }

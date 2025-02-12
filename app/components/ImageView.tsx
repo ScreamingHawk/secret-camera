@@ -12,9 +12,17 @@ interface ImageViewProps {
   uri: string;
   onClose: () => void;
   onDelete?: () => void;
+  onNext?: () => void;
+  onPrevious?: () => void;
 }
 
-export default function ImageView({ uri, onClose, onDelete }: ImageViewProps) {
+export default function ImageView({
+  uri,
+  onClose,
+  onDelete,
+  onNext,
+  onPrevious,
+}: ImageViewProps) {
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
 
@@ -43,6 +51,16 @@ export default function ImageView({ uri, onClose, onDelete }: ImageViewProps) {
         style={[styles.image, { width: screenWidth, height: screenHeight }]}
         resizeMode="contain"
       />
+
+      <TouchableOpacity
+        style={[styles.navTouch, { left: 0 }]}
+        onPress={onPrevious}
+      />
+      <TouchableOpacity
+        style={[styles.navTouch, { right: 0 }]}
+        onPress={onNext}
+      />
+
       <View style={styles.header}>
         <TouchableOpacity style={styles.iconButton} onPress={handleShare}>
           <Ionicons name="share-outline" size={32} color="white" />
@@ -79,6 +97,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 20,
     paddingTop: 40,
+    zIndex: 2,
   },
   iconButton: {
     padding: 10,
@@ -86,5 +105,12 @@ const styles = StyleSheet.create({
   rightButtons: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  navTouch: {
+    position: 'absolute',
+    top: 0,
+    width: 100,
+    height: '100%',
+    zIndex: 1,
   },
 });
