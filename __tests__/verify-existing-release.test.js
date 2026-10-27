@@ -7,6 +7,7 @@ const {
   apiRelease,
 } = require('../scripts/verify-existing-release');
 const root = path.resolve(__dirname, '..');
+const metadata = require('../scripts/validate-release').validateMetadata(root);
 const commit = 'a'.repeat(40);
 const signer = 'b'.repeat(64);
 const assets = [
@@ -22,7 +23,7 @@ beforeEach(() => {
   fixture = path.join(temp, 'download');
   fs.mkdirSync(fixture);
   release = {
-    tag_name: 'v1.1.1',
+    tag_name: `v${metadata.version}`,
     draft: false,
     prerelease: false,
     assets: assets.map((name) => ({ name })),
@@ -38,9 +39,9 @@ beforeEach(() => {
   fs.writeFileSync(
     path.join(fixture, assets[2]),
     JSON.stringify({
-      version: '1.1.1',
-      versionCode: 1,
-      package: 'link.standen.secretcamera',
+      version: metadata.version,
+      versionCode: metadata.versionCode,
+      package: metadata.package,
       commit,
       sha256: digest,
     })
@@ -57,7 +58,7 @@ beforeEach(() => {
     if (command.endsWith('apksigner'))
       return `Signer #1 certificate SHA-256 digest: ${signer}\n`;
     if (command.endsWith('aapt'))
-      return "package: name='link.standen.secretcamera' versionCode='1' versionName='1.1.1'\n";
+      return `package: name='${metadata.package}' versionCode='${metadata.versionCode}' versionName='${metadata.version}'\n`;
     throw new Error(`unexpected command ${command}`);
   });
   jest.doMock('node:child_process', () => ({ execFileSync }));
@@ -77,7 +78,7 @@ function invoke(out = path.join(temp, 'out')) {
   const tools = path.join(temp, 'build-tools', '35.0.0');
   fs.mkdirSync(tools, { recursive: true });
   try {
-    return verifyExistingRelease('v1.1.1', commit, out, root);
+    return verifyExistingRelease(`v${metadata.version}`, commit, out, root);
   } finally {
     process.env = old;
   }

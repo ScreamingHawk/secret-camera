@@ -15,6 +15,16 @@ function fixture() {
   fs.mkdirSync(root);
   for (const file of ['app.json', 'package.json', 'package-lock.json'])
     fs.copyFileSync(file, path.join(root, file));
+  const app = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'));
+  app.expo.version = '1.1.1';
+  app.expo.android.versionCode = 1;
+  fs.writeFileSync(path.join(root, 'app.json'), JSON.stringify(app));
+  for (const file of ['package.json', 'package-lock.json']) {
+    const data = JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
+    data.version = '1.1.1';
+    if (data.packages) data.packages[''].version = '1.1.1';
+    fs.writeFileSync(path.join(root, file), JSON.stringify(data));
+  }
   const input = path.join(dir, 'synthetic-fixture.bin');
   fs.writeFileSync(input, Buffer.from('synthetic bytes; not an APK build'));
   return { dir, root, output, input };

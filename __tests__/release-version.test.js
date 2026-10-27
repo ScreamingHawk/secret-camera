@@ -11,6 +11,17 @@ function fixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'secret-camera-version-'));
   for (const file of ['app.json', 'package.json', 'package-lock.json'])
     fs.copyFileSync(file, path.join(dir, file));
+  edit(dir, 'app.json', (x) => {
+    x.expo.version = '1.1.1';
+    x.expo.android.versionCode = 1;
+  });
+  edit(dir, 'package.json', (x) => {
+    x.version = '1.1.1';
+  });
+  edit(dir, 'package-lock.json', (x) => {
+    x.version = '1.1.1';
+    x.packages[''].version = '1.1.1';
+  });
   return dir;
 }
 function edit(dir, file, update) {
@@ -82,19 +93,30 @@ test('reads changed canonical app version dynamically and rejects stale mirrors'
 test.each(['1.1.1', 'v1.1.2', 'v1.1.1-rc.1', 'v01.1.1'])(
   'rejects invalid or mismatched stable tag %s',
   (tag) => {
-    expect(() => validateRelease(tag, '0')).toThrow();
+    const dir = fixture();
+    try {
+      expect(() => validateRelease(tag, '0', dir)).toThrow();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   }
 );
 
 test('explicit fresh-lineage zero baseline accepts the first code without inventing legacy history', () => {
-  expect(validateRelease('v1.1.1', '0').versionCode).toBe(1);
+  const metadata = validateMetadata(path.resolve(__dirname, '..'));
+  expect(validateRelease(`v${metadata.version}`, '0').versionCode).toBe(
+    metadata.versionCode
+  );
 });
 
 test('release validation fails closed without history and rejects reused code', () => {
-  expect(() => validateRelease('v1.1.1', undefined)).toThrow(
+  const metadata = validateMetadata(path.resolve(__dirname, '..'));
+  expect(() => validateRelease(`v${metadata.version}`, undefined)).toThrow(
     /PREVIOUS_VERSION_CODE/
   );
-  expect(() => validateRelease('v1.1.1', '1')).toThrow(/must exceed/);
+  expect(() =>
+    validateRelease(`v${metadata.version}`, String(metadata.versionCode))
+  ).toThrow(/must exceed/);
 });
 
 test('rejects invalid Android application ID and non-positive code', () => {
