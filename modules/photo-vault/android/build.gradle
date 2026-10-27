@@ -1,0 +1,27 @@
+plugins {
+  id 'com.android.library'
+  id 'org.jetbrains.kotlin.android'
+}
+
+group = 'expo.modules.photovault'
+version = '1.0.0'
+
+android {
+  namespace 'expo.modules.photovault'
+  compileSdkVersion safeExtGet('compileSdkVersion', 35)
+  defaultConfig {
+    minSdkVersion safeExtGet('minSdkVersion', 24)
+    testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+  }
+  testOptions { unitTests.includeAndroidResources = true }
+}
+
+def safeExtGet(String prop, Object fallback) {
+  rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+  androidTestImplementation 'androidx.test:runner:1.6.2'
+  androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+}

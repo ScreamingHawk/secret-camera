@@ -1,0 +1,6 @@
+# Allow the local photo-vault module through the root android/ ignore.
+!/photo-vault/android/
+!/photo-vault/android/**
+/photo-vault/android/.gradle/
+/photo-vault/android/build/
+/photo-vault/android/local.properties

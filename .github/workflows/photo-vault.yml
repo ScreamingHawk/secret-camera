@@ -1,0 +1,79 @@
+name: Photo vault Android tests
+
+on:
+  pull_request:
+    paths:
+      - 'modules/**'
+      - '.github/workflows/photo-vault.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'app.json'
+  push:
+    branches: [main]
+    paths:
+      - 'modules/**'
+      - '.github/workflows/photo-vault.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'app.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: photo-vault-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-keystore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.23.4'
+          cache: npm
+      - name: Java
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Android project
+        env:
+          CI: '1'
+        run: npx expo prebuild --platform android --no-install
+      - name: Assemble native module and test APK
+        working-directory: android
+        run: ./gradlew --no-daemon :expo-photo-vault:assembleDebug :expo-photo-vault:assembleDebugAndroidTest
+      - name: Enable KVM on hosted runner
+        run: |
+          printf '%s\n' 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise AndroidKeyStore with disposable aliases
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          working-directory: android
+          script: ./gradlew --no-daemon :expo-photo-vault:connectedDebugAndroidTest
+      - name: Save instrumented test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: photo-vault-android-test-reports
+          path: |
+            modules/photo-vault/android/build/outputs/androidTest-results/
+            modules/photo-vault/android/build/reports/androidTests/
+          if-no-files-found: warn
