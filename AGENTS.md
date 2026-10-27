@@ -4,7 +4,7 @@
 
 Use Beads (`bd`) for implementation tasks. Run `bd prime` and read the exact issue with `bd show <id>` before working. See `.beads/README.md` for the actual Git/JSONL publication procedure; there is no configured Dolt remote.
 
-The initial tickets are backlog capture, not authorization to implement, claim, dispatch, or close them. Verification belongs in each implementation ticket rather than a separate proof-only ticket. Do not seed the earlier broad revival plan as additional tasks without approval.
+Implementation is authorized for the publishing chain only: `sc-21g` (deterministic versioning) -> `sc-5rc` (tag-triggered signed APK releases) -> `sc-k8v` (personal F-Droid repository plus docs CI). Work in dependency order in an isolated worktree; the orchestrator owns tracker transitions, review, commits and publication. Relock, encryption and barcode cleanup remain unstarted backlog. Verification belongs in each implementation ticket rather than a separate proof-only ticket. Do not seed the earlier broad revival plan as additional tasks without approval. Missing signing keys or historical version evidence are real release blockers, not permission to invent a baseline or replace the signer.
 
 ## Approved scope and release direction
 
