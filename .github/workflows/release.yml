@@ -1,0 +1,145 @@
+name: Android stable release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: stable-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      CI: true
+      ANDROID_SIGNER_SHA256: ${{ vars.ANDROID_SIGNER_SHA256 }}
+    outputs:
+      commit: ${{ steps.trust.outputs.commit }}
+      version: ${{ steps.meta.outputs.version }}
+      existing: ${{ steps.existing.outputs.exists }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+      - id: trust
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          git fetch origin main --no-tags
+          commit="$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
+          git merge-base --is-ancestor "$commit" origin/main
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+          cache: npm
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - run: npm ci
+      - id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/validate-release.js --metadata > "$RUNNER_TEMP/meta.json"
+          node -e 'const m=require(process.argv[1]); console.log(`version=${m.version}`)' "$RUNNER_TEMP/meta.json" >> "$GITHUB_OUTPUT"
+          [[ -n "$ANDROID_SIGNER_SHA256" && "$ANDROID_SIGNER_SHA256" =~ ^[[:xdigit:]]{64}$ ]]
+      - id: existing
+        name: Verify and reuse an existing published release, if present
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-existing-release.js "$GITHUB_REF_NAME" "${{ steps.trust.outputs.commit }}" "$RUNNER_TEMP/release-assets" > "$RUNNER_TEMP/existing.json"
+          exists="$(node -e 'const x=require(process.argv[1]); if(typeof x.exists!=="boolean") process.exit(2); process.stdout.write(String(x.exists))' "$RUNNER_TEMP/existing.json")"
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
+      - name: Check monotonic release version history
+        if: steps.existing.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANDROID_SIGNER_SHA256: ${{ vars.ANDROID_SIGNER_SHA256 }}
+        run: PREVIOUS_VERSION_CODE="$(node scripts/release-history.js)" node scripts/validate-release.js --release "$GITHUB_REF_NAME"
+      - name: Build production release APK once
+        if: steps.existing.outputs.exists != 'true'
+        run: |
+          npx expo prebuild --platform android --no-install
+          cd android && ./gradlew assembleRelease --no-daemon
+          mkdir -p "$RUNNER_TEMP/release-assets"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/release-assets/input.apk"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stable-release-inputs
+          path: ${{ runner.temp }}/release-assets/
+          if-no-files-found: error
+          retention-days: 1
+  publish:
+    needs: verify
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      ANDROID_SIGNER_SHA256: ${{ vars.ANDROID_SIGNER_SHA256 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ needs.verify.outputs.commit }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.4
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: needs.verify.outputs.existing != 'true'
+        with:
+          name: stable-release-inputs
+          path: ${{ runner.temp }}/release-assets
+      - id: recheck
+        name: Recheck existing release before signing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME" --no-tags
+          node scripts/verify-existing-release.js "$GITHUB_REF_NAME" "${{ needs.verify.outputs.commit }}" "$RUNNER_TEMP/recheck" > "$RUNNER_TEMP/recheck.json"
+          exists="$(node -e 'const x=require(process.argv[1]); if(typeof x.exists!=="boolean") process.exit(2); process.stdout.write(String(x.exists))' "$RUNNER_TEMP/recheck.json")"
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
+      - name: Confirm verified rerun or sign and package production APK
+        if: steps.recheck.outputs.exists != 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          key="$RUNNER_TEMP/release.jks"
+          cleanup() { rm -f "$key"; }
+          trap cleanup EXIT
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$key"
+          chmod 600 "$key"
+          export ANDROID_KEYSTORE_PATH="$key"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          bash scripts/sign-apk.sh "$RUNNER_TEMP/release-assets/input.apk" "$RUNNER_TEMP/release-assets/secret-camera.apk"
+          node scripts/package-release.js "$RUNNER_TEMP/release-assets/secret-camera.apk" "$RUNNER_TEMP/release-assets" "${{ needs.verify.outputs.commit }}"
+      - name: Create immutable stable release
+        if: steps.recheck.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/release-assets/secret-camera.apk" "$RUNNER_TEMP/release-assets/secret-camera.apk.sha256" "$RUNNER_TEMP/release-assets/version.json" --title "$GITHUB_REF_NAME" --notes "Stable Android release $GITHUB_REF_NAME" --verify-tag --prerelease=false --draft=false --latest
