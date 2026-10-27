@@ -35,25 +35,25 @@ jobs:
       - name: Install Pandoc
         run: sudo apt-get install -y pandoc
 
-      - name: Create clean docs directory
-        run: mkdir docs
+      - name: Create clean _site directory
+        run: mkdir _site
 
       - name: Convert Markdown to HTML
         run: |
           # Convert README.md to index.html with a title
-          echo "<html><head><title>Secret Camera App</title></head><body>" > docs/index.html
-          pandoc README.md >> docs/index.html
-          echo "</body></html>" >> docs/index.html
+          echo "<html><head><title>Secret Camera App</title></head><body>" > _site/index.html
+          pandoc README.md >> _site/index.html
+          echo "</body></html>" >> _site/index.html
 
           # Convert PRIVACY.md to PRIVACY.html with a title
-          echo "<html><head><title>Privacy Policy - Secret Camera App</title></head><body>" > docs/PRIVACY.html
-          pandoc PRIVACY.md >> docs/PRIVACY.html
-          echo "</body></html>" >> docs/PRIVACY.html
+          echo "<html><head><title>Privacy Policy - Secret Camera App</title></head><body>" > _site/PRIVACY.html
+          pandoc PRIVACY.md >> _site/PRIVACY.html
+          echo "</body></html>" >> _site/PRIVACY.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'docs'
+          path: '_site'
 
       - name: Deploy to GitHub Pages
         id: deployment
