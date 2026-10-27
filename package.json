@@ -1,7 +1,7 @@
 {
   "name": "secret-camera",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
@@ -11,7 +11,10 @@
     "test": "jest --watchAll",
     "lint": "expo lint",
     "format": "prettier --write .",
-    "prepare-dev": "npx lefthook install"
+    "prepare-dev": "npx lefthook install",
+    "test:ci": "jest --runInBand",
+    "typecheck": "tsc --noEmit",
+    "release:validate": "node scripts/validate-release.js"
   },
   "jest": {
     "preset": "jest-expo"
