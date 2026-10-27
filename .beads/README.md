@@ -1,81 +1,38 @@
-# Beads - AI-Native Issue Tracking
+# Beads issue tracking
 
-Welcome to Beads! This repository uses **Beads** for issue tracking - a modern, AI-native tool designed to live directly in your codebase alongside your code.
+This repository uses the `bd` CLI (initialized with Beads 1.0.3) with issue prefix `sc` and a local embedded Dolt database.
 
-## What is Beads?
+## Daily commands
 
-Beads is issue tracking that lives in your repo, making it perfect for AI coding agents and developers who want their issues close to their code. No web UI required - everything works through the CLI and integrates seamlessly with git.
-
-**Learn more:** [github.com/steveyegge/beads](https://github.com/steveyegge/beads)
-
-## Quick Start
-
-### Essential Commands
-
-```bash
-# Create new issues
-bd create "Add user authentication"
-
-# View all issues
-bd list
-
-# View issue details
-bd show <issue-id>
-
-# Update issue status
-bd update <issue-id> --claim
-bd update <issue-id> --status done
-
-# Sync with Dolt remote
-bd dolt push
+```sh
+bd prime
+bd list --limit 0
+bd ready --limit 0
+bd show <id>
+bd update <id> --status in_progress
+bd close <id> --reason "Implemented and verified ..."
 ```
 
-### Working with Issues
+Creating a ticket is not authorization to implement it. Keep future tasks open until implementation is requested. Put tests and real verification in each implementation ticket; do not create separate proof-only tickets for routine development acceptance.
 
-Issues in Beads are:
-- **Git-native**: Stored in Dolt database with version control and branching
-- **AI-friendly**: CLI-first design works perfectly with AI coding agents
-- **Branch-aware**: Issues can follow your branch workflow
-- **Always in sync**: Auto-syncs with your commits
+## Publication and collaboration
 
-## Why Beads?
+There is **no Dolt remote configured**. The database is local and ignored by Git; `git push` does not publish that database. The reviewed `.beads/issues.jsonl` export is the versioned issue snapshot.
 
-✨ **AI-Native Design**
-- Built specifically for AI-assisted development workflows
-- CLI-first interface works seamlessly with AI coding agents
-- No context switching to web UIs
+After all issue edits and comments are complete:
 
-🚀 **Developer Focused**
-- Issues live in your repo, right next to your code
-- Works offline, syncs when you push
-- Fast, lightweight, and stays out of your way
-
-🔧 **Git Integration**
-- Automatic sync with git commits
-- Branch-aware issue tracking
-- Dolt-native three-way merge resolution
-
-## Get Started with Beads
-
-Try Beads in your own projects:
-
-```bash
-# Install Beads
-curl -sSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash
-
-# Initialize in your repo
-bd init
-
-# Create your first issue
-bd create "Try out Beads"
+```sh
+bd export --no-memories -o .beads/issues.jsonl
+bd dep cycles
+bd lint
+bd blocked
+bd ready --limit 0
+# Review the JSONL for secrets and personal runtime metadata.
+git add .beads/issues.jsonl
+git commit -m "chore: update tracked issues"
+git push
 ```
 
-## Learn More
+Use the configured project actor for tracker audit fields; preserve the approved Git author and signing configuration. Owner fields may default to local Git identity: normalize public snapshot owner/audit metadata to `Project Contributors` after the final export, preserving all actual issue content. Do not claim the snapshot updates automatically on Git commits. A populated-tracker restore procedure has not been tested here; consult the installed `bd` help before importing into a fresh local database.
 
-- **Documentation**: [github.com/steveyegge/beads/docs](https://github.com/steveyegge/beads/tree/main/docs)
-- **Quick Start Guide**: Run `bd quickstart`
-- **Examples**: [github.com/steveyegge/beads/examples](https://github.com/steveyegge/beads/tree/main/examples)
-
----
-
-*Beads: Issue tracking that moves at the speed of thought* ⚡
+Do not commit Dolt runtime directories, backup state, credentials, signing keys, or plaintext/private photos. No Git hooks were installed by this initialization, so the existing Lefthook setup remains unchanged.
