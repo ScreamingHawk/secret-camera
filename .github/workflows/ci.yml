@@ -23,6 +23,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          packages: platform-tools
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - run: npm ci
       - run: npm run release:validate -- --metadata
