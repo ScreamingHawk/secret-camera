@@ -1,0 +1,4 @@
+# Reproducible F-Droid index-generator runtime (fdroidserver 2.3.2)
+fdroidserver==2.3.2
+# 4.1.4 crashes parsing APK v2/v3 signatures in fdroidserver 2.3.2; use last compatible release.
+androguard==4.1.3
