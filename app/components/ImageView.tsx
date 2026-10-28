@@ -14,6 +14,7 @@ interface ImageViewProps {
   onDelete?: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
+  onShareState: (active: boolean) => void;
 }
 
 export default function ImageView({
@@ -22,11 +23,13 @@ export default function ImageView({
   onDelete,
   onNext,
   onPrevious,
+  onShareState,
 }: ImageViewProps) {
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
 
   const handleShare = async () => {
+    onShareState(true);
     try {
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
@@ -41,6 +44,8 @@ export default function ImageView({
       });
     } catch (error) {
       console.error('Error sharing image:', error);
+    } finally {
+      onShareState(false);
     }
   };
 

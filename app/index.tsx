@@ -1,6 +1,7 @@
 import { useCameraPermissions } from 'expo-camera';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  AppState,
   BackHandler,
   Button,
   Image,
@@ -20,9 +21,74 @@ export default function Index() {
   const [showGallery, setShowGallery] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const authInFlight = useRef(false);
+  const mounted = useRef(true);
+  const appActive = useRef(AppState.currentState === 'active');
+  const sharing = useRef(false);
+  const resumePending = useRef(false);
+  const authGeneration = useRef(0);
+  const [privacyCovered, setPrivacyCovered] = useState(false);
+
+  const authenticate = async () => {
+    if (authInFlight.current) return;
+    authInFlight.current = true;
+    const generation = authGeneration.current;
+    try {
+      const success = await authenticateUser();
+      if (
+        mounted.current &&
+        generation === authGeneration.current &&
+        success &&
+        appActive.current
+      ) {
+        setIsAuthenticated(true);
+        setPrivacyCovered(false);
+      }
+    } catch (error) {
+      console.error('Authentication failed:', error);
+    } finally {
+      authInFlight.current = false;
+      if (
+        mounted.current &&
+        resumePending.current &&
+        appActive.current &&
+        !sharing.current
+      ) {
+        resumePending.current = false;
+        void authenticate();
+      }
+    }
+  };
 
   useEffect(() => {
-    authenticateUser().then(setIsAuthenticated);
+    mounted.current = true;
+    void authenticate();
+    const subscription = AppState.addEventListener('change', (state) => {
+      const wasActive = appActive.current;
+      // Ignore the biometric sheet's inactive→active transition. Android may
+      // go directly to background, which remains a real relock boundary.
+      if (state === 'inactive') return;
+      appActive.current = state === 'active';
+      if (state === 'background') {
+        authGeneration.current += 1;
+        resumePending.current = true;
+        if (sharing.current) setPrivacyCovered(true);
+        else {
+          setIsAuthenticated(false);
+          setPrivacyCovered(false);
+        }
+      } else if (!wasActive && !sharing.current) {
+        if (authInFlight.current) resumePending.current = true;
+        else {
+          resumePending.current = false;
+          void authenticate();
+        }
+      }
+    });
+    return () => {
+      mounted.current = false;
+      subscription.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -58,10 +124,7 @@ export default function Index() {
         <Text style={styles.message}>
           Please authenticate to access the app
         </Text>
-        <Button
-          onPress={() => authenticateUser().then(setIsAuthenticated)}
-          title="Authenticate"
-        />
+        <Button onPress={() => void authenticate()} title="Authenticate" />
       </View>
     );
   }
@@ -88,7 +151,31 @@ export default function Index() {
   }
 
   if (showGallery) {
-    return <GalleryView onClose={() => setShowGallery(false)} />;
+    const onShareState = (active: boolean) => {
+      sharing.current = active;
+      if (!active && resumePending.current) {
+        setPrivacyCovered(false);
+        setIsAuthenticated(false);
+        if (appActive.current) {
+          resumePending.current = false;
+          if (authInFlight.current) resumePending.current = true;
+          else void authenticate();
+        }
+      }
+    };
+    return (
+      <View style={styles.privacyCover}>
+        <GalleryView
+          onClose={() => setShowGallery(false)}
+          onShareState={onShareState}
+        />
+        {privacyCovered && (
+          <View pointerEvents="auto" style={styles.coverOverlay}>
+            <Text style={styles.message}>Private content hidden</Text>
+          </View>
+        )}
+      </View>
+    );
   }
 
   if (showAbout) {
@@ -133,6 +220,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F6F7',
+  },
+  privacyCover: { flex: 1 },
+  coverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#F5F6F7',
+    zIndex: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     flex: 1,

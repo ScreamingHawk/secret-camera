@@ -15,9 +15,13 @@ import ImageView from './ImageView';
 
 interface GalleryViewProps {
   onClose: () => void;
+  onShareState: (active: boolean) => void;
 }
 
-export default function GalleryView({ onClose }: GalleryViewProps) {
+export default function GalleryView({
+  onClose,
+  onShareState,
+}: GalleryViewProps) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
@@ -98,6 +102,7 @@ export default function GalleryView({ onClose }: GalleryViewProps) {
         uri={selectedPhoto}
         onClose={() => setSelectedPhoto(null)}
         onDelete={() => handleDeleteImage(selectedPhoto)}
+        onShareState={onShareState}
         onNext={() => {
           if (currentIndex < photos.length - 1) {
             setSelectedPhoto(photos[currentIndex + 1]);
