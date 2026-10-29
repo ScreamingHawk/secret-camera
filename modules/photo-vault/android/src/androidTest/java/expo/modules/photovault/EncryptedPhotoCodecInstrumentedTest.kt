@@ -97,6 +97,33 @@ class EncryptedPhotoCodecInstrumentedTest {
   }
 
   @Test
+  fun destinationCreatedAfterValidationIsNeverReplacedAndStagingIsRemoved() = withFixture { dir, _, alias ->
+    val source = File(dir, "race-source.jpg").apply { writeText("synthetic encrypted payload") }
+    val destination = File(dir, "raced-file.scv")
+    val racingCodec = EncryptedPhotoCodec(dir, VaultKeyStore(alias)) {
+      destination.writeText("attacker-created file")
+    }
+    assertThrows(Exception::class.java) { racingCodec.encrypt(source.path, destination.path) }
+    assertTrue(destination.readText() == "attacker-created file")
+    assertTrue(dir.listFiles()!!.none { it.name.startsWith(".vault-") })
+
+    val outside = File(dir.parentFile, "codec-race-target-${UUID.randomUUID()}").apply { writeText("outside sentinel") }
+    val symlink = File(dir, "raced-link.scv")
+    try {
+      val symlinkCodec = EncryptedPhotoCodec(dir, VaultKeyStore(alias)) {
+        android.system.Os.symlink(outside.path, symlink.path)
+      }
+      assertThrows(Exception::class.java) { symlinkCodec.encrypt(source.path, symlink.path) }
+      assertTrue("destination symlink was changed", android.system.Os.readlink(symlink.path) == outside.path)
+      assertTrue("symlink target was redirected or overwritten", outside.readText() == "outside sentinel")
+      assertTrue(dir.listFiles()!!.none { it.name.startsWith(".vault-") })
+    } finally {
+      symlink.delete()
+      outside.delete()
+    }
+  }
+
+  @Test
   fun pinnedDirectoryResistsParentSwapDuringReadAndPublication() = withFixture { dir, codec, alias ->
     val source = File(dir, "source.jpg").apply { writeText("original synthetic bytes") }
     val destination = File(dir, "photo.scv")

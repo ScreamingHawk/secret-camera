@@ -14,6 +14,12 @@ android {
     testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
   }
   testOptions { unitTests.includeAndroidResources = true }
+  externalNativeBuild {
+    cmake {
+      path 'src/main/cpp/CMakeLists.txt'
+      version '3.22.1'
+    }
+  }
 }
 
 def safeExtGet(String prop, Object fallback) {

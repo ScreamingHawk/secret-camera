@@ -4,7 +4,6 @@ import android.os.ParcelFileDescriptor
 import android.system.Os
 import android.system.OsConstants
 import java.io.File
-import java.io.FileOutputStream
 import java.io.FileInputStream
 import java.util.UUID
 import java.security.GeneralSecurityException
@@ -99,19 +98,13 @@ internal class EncryptedPhotoCodec(
   }
 
   private fun publishExclusive(root: File, name: String, bytes: ByteArray) {
-    val stagedName = ".vault-${UUID.randomUUID()}.tmp"
-    val staged = File(root, stagedName)
-    val target = File(root, name)
-    val fd = Os.open(staged.path, OsConstants.O_WRONLY or OsConstants.O_CREAT or OsConstants.O_EXCL or OsConstants.O_CLOEXEC or OsConstants.O_NOFOLLOW, OsConstants.S_IRUSR or OsConstants.S_IWUSR)
-    try {
-      FileOutputStream(fd).use { it.write(bytes); it.fd.sync() }
-      Os.link(staged.path, target.path)
-    } finally {
-      try { Os.remove(staged.path) } catch (_: Exception) { }
-    }
+    publishExclusiveNative(root.name.toInt(), name, ".vault-${UUID.randomUUID()}.tmp", bytes)
   }
 
+  private external fun publishExclusiveNative(directoryFd: Int, destinationName: String, stagedName: String, bytes: ByteArray)
+
   companion object {
+    init { System.loadLibrary("photo_vault") }
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val TAG_BITS = 128
     private const val TAG_BYTES = 16
