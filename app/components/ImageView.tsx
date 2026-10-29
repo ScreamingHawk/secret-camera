@@ -4,9 +4,11 @@ import {
   Dimensions,
   Image,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { usePhotoView } from '../utils/encryptedPhotoView';
 
 interface ImageViewProps {
   uri: string;
@@ -25,10 +27,12 @@ export default function ImageView({
   onPrevious,
   onShareState,
 }: ImageViewProps) {
+  const { view, error, encrypted } = usePhotoView(uri);
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
 
   const handleShare = async () => {
+    if (encrypted) return;
     onShareState(true);
     try {
       const isAvailable = await Sharing.isAvailableAsync();
@@ -43,7 +47,7 @@ export default function ImageView({
         UTI: 'public.jpeg',
       });
     } catch (error) {
-      console.error('Error sharing image:', error);
+      console.error('Unable to share image');
     } finally {
       onShareState(false);
     }
@@ -51,11 +55,21 @@ export default function ImageView({
 
   return (
     <View style={styles.container}>
-      <Image
-        source={{ uri }}
-        style={[styles.image, { width: screenWidth, height: screenHeight }]}
-        resizeMode="contain"
-      />
+      {view ? (
+        <Image
+          source={{ uri: view }}
+          style={[styles.image, { width: screenWidth, height: screenHeight }]}
+          resizeMode="contain"
+        />
+      ) : (
+        <View style={styles.message}>
+          <Text style={{ color: 'white' }}>
+            {error
+              ? 'Photo unavailable. It may be damaged or the encryption key is missing.'
+              : 'Unlocking photo…'}
+          </Text>
+        </View>
+      )}
 
       <TouchableOpacity
         style={[styles.navTouch, { left: 0 }]}
@@ -67,8 +81,21 @@ export default function ImageView({
       />
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} onPress={handleShare}>
-          <Ionicons name="share-outline" size={32} color="white" />
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={handleShare}
+          disabled={encrypted}
+          accessibilityLabel={
+            encrypted
+              ? 'Sharing encrypted photos is not available'
+              : 'Share image'
+          }
+        >
+          <Ionicons
+            name="share-outline"
+            size={32}
+            color={encrypted ? '#777' : 'white'}
+          />
         </TouchableOpacity>
         <View style={styles.rightButtons}>
           {onDelete && (
@@ -92,6 +119,12 @@ const styles = StyleSheet.create({
   },
   image: {
     flex: 1,
+  },
+  message: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
   },
   header: {
     position: 'absolute',

@@ -9,6 +9,10 @@ export type PhotoVaultKeyLifecycle = {
   encryptFile(inputPath: string, outputPath: string): Promise<void>;
   /** Authenticates completely before publishing plaintext; never overwrites. */
   decryptFile(inputPath: string, outputPath: string): Promise<void>;
+  /** Authenticates an encrypted gallery leaf and returns a private file:// image URI. */
+  prepareEncryptedPhotoView(filename: string): Promise<string>;
+  /** Idempotently removes a URI previously returned by prepareEncryptedPhotoView. */
+  releaseEncryptedPhotoView(viewUri: string): Promise<void>;
   /**
    * Both file operations resolve paths only against the app-private filesDir;
    * each operation pins that directory and rejects swapped parent/symlinked leaves.

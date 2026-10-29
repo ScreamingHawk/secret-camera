@@ -151,6 +151,29 @@ class EncryptedPhotoCodecInstrumentedTest {
     assertTrue(restored.readText() == "original synthetic bytes")
   }
 
+  @Test
+  fun preparesAndReleasesAuthenticatedPrivateViewWithoutPublishingFailures() = withFixture { dir, codec, alias ->
+    val gallery = File(dir, "gallery").apply { mkdir() }
+    val cache = File(dir, "private-view-cache").apply { mkdir() }
+    val original = ByteArray(4096) { (it % 239).toByte() }
+    val source = File(gallery, "source.jpg").apply { writeBytes(original) }
+    val galleryCodec = EncryptedPhotoCodec(gallery, VaultKeyStore(alias))
+    galleryCodec.encrypt(source.path, File(gallery, "photo.scv").path)
+    val viewCodec = EncryptedPhotoCodec(gallery, VaultKeyStore(alias), trustedOutputDir = cache)
+    val view = viewCodec.prepareView("photo.scv")
+    assertTrue(view.name.startsWith("view-") && view.name.endsWith(".jpg"))
+    assertArrayEquals(original, view.readBytes())
+    viewCodec.releaseView(view.name)
+    viewCodec.releaseView(view.name)
+    assertFalse(view.exists())
+
+    val bad = File(gallery, "corrupt.scv").apply { writeBytes(ByteArray(64)) }
+    assertThrows(Exception::class.java) { viewCodec.prepareView(bad.name) }
+    assertTrue(cache.listFiles()!!.isEmpty())
+    assertThrows(Exception::class.java) { viewCodec.prepareView("missing.scv") }
+    assertTrue(cache.listFiles()!!.isEmpty())
+  }
+
   private fun withFixture(block: (File, EncryptedPhotoCodec, String) -> Unit) {
     val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
     val dir = File(context.filesDir, "codec-test-${UUID.randomUUID()}").apply { mkdir() }

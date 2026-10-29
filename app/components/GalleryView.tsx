@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { APP_DIRECTORY } from '../constants';
+import { usePhotoView } from '../utils/encryptedPhotoView';
 import ImageView from './ImageView';
 
 interface GalleryViewProps {
@@ -47,10 +48,6 @@ export default function GalleryView({
 
   async function loadPhotos() {
     try {
-      console.log(
-        'Loading photos from directory:',
-        APP_DIRECTORY.SECRET_CAMERA
-      );
       const files = await FileSystem.readDirectoryAsync(
         APP_DIRECTORY.SECRET_CAMERA
       );
@@ -59,7 +56,7 @@ export default function GalleryView({
       );
       setPhotos(photoUris.reverse());
     } catch (error) {
-      console.error('Error loading photos:', error);
+      console.error('Unable to load gallery');
     }
   }
 
@@ -87,7 +84,7 @@ export default function GalleryView({
         }
       }
     } catch (error) {
-      console.error('Error deleting image:', error);
+      console.error('Unable to delete photo');
     }
   }
 
@@ -117,28 +114,6 @@ export default function GalleryView({
     );
   }
 
-  function GalleryItem({
-    item,
-    imageSize,
-    onSelect,
-  }: {
-    item: string;
-    imageSize: number;
-    onSelect: (uri: string) => void;
-  }) {
-    return (
-      <TouchableOpacity
-        style={styles.imageContainer}
-        onPress={() => onSelect(item)}
-      >
-        <Image
-          source={{ uri: item }}
-          style={[styles.image, { width: imageSize, height: imageSize }]}
-        />
-      </TouchableOpacity>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <TouchableOpacity style={styles.closeButton} onPress={onClose}>
@@ -161,6 +136,45 @@ export default function GalleryView({
   );
 }
 
+function GalleryItem({
+  item,
+  imageSize,
+  onSelect,
+}: {
+  item: string;
+  imageSize: number;
+  onSelect: (uri: string) => void;
+}) {
+  const { view, error } = usePhotoView(item);
+  return (
+    <TouchableOpacity
+      style={styles.imageContainer}
+      onPress={() => onSelect(item)}
+    >
+      {view ? (
+        <Image
+          source={{ uri: view }}
+          style={[styles.image, { width: imageSize, height: imageSize }]}
+        />
+      ) : (
+        <View
+          style={[
+            styles.image,
+            styles.unavailable,
+            { width: imageSize, height: imageSize },
+          ]}
+        >
+          <Ionicons
+            name={error ? 'alert-circle-outline' : 'lock-closed-outline'}
+            size={24}
+            color="#555"
+          />
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -175,5 +189,10 @@ const styles = StyleSheet.create({
   },
   image: {
     borderRadius: 8,
+  },
+  unavailable: {
+    backgroundColor: '#ddd',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

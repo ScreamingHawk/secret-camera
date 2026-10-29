@@ -14,9 +14,10 @@ import javax.crypto.spec.GCMParameterSpec
 internal class EncryptedPhotoCodec(
   private val filesDir: File,
   private val keys: VaultKeyStore,
+  private val trustedOutputDir: File = filesDir,
   private val afterPathValidation: () -> Unit = {}
 ) {
-  fun encrypt(inputPath: String, outputPath: String) = withPinnedRoot { root ->
+  fun encrypt(inputPath: String, outputPath: String) = withPinned(filesDir) { root ->
     val input = validatePath(inputPath, mustExist = true)
     val output = validatePath(outputPath, mustExist = false)
     check(input != output) { "Input and output must differ" }
@@ -30,7 +31,7 @@ internal class EncryptedPhotoCodec(
     publishExclusive(root, output.name, HEADER + nonce + cipher.doFinal(plain))
   }
 
-  fun decrypt(inputPath: String, outputPath: String) = withPinnedRoot { root ->
+  fun decrypt(inputPath: String, outputPath: String) = withPinned(filesDir) { root ->
     val input = validatePath(inputPath, mustExist = true)
     val output = validatePath(outputPath, mustExist = false)
     check(input != output) { "Input and output must differ" }
@@ -47,8 +48,51 @@ internal class EncryptedPhotoCodec(
     publishExclusive(root, output.name, plaintext)
   }
 
-  private inline fun <T> withPinnedRoot(block: (File) -> T): T {
-    val canonical = filesDir.canonicalFile
+  fun prepareView(encryptedLeaf: String): File {
+    require(encryptedLeaf.isNotBlank() && File(encryptedLeaf).name == encryptedLeaf && encryptedLeaf != "." && encryptedLeaf != "..") { "Expected encrypted photo leaf name" }
+    val outputName = "view-${UUID.randomUUID()}.jpg"
+    withPinnedRoots { inputRoot, outputRoot ->
+      val input = validateLeaf(inputRoot, encryptedLeaf, true)
+      afterPathValidation()
+      val envelope = readBounded(input, MAX_ENVELOPE_BYTES)
+      val plaintext = decryptAuthenticated(envelope)
+      publishExclusive(outputRoot, outputName, plaintext)
+    }
+    return File(trustedOutputDir, outputName)
+  }
+
+  fun releaseView(token: String) {
+    require(token.matches(Regex("view-[0-9a-f-]{36}\\.jpg"))) { "Invalid private view token" }
+    withPinnedOutput { root ->
+      File(root, token).delete()
+      Unit
+    }
+  }
+
+  private fun decryptAuthenticated(envelope: ByteArray): ByteArray {
+    require(envelope.size >= HEADER.size + NONCE_BYTES + TAG_BYTES) { "Encrypted photo is truncated" }
+    require(envelope.copyOfRange(0, HEADER.size).contentEquals(HEADER)) { "Unsupported encrypted photo format" }
+    val nonce = envelope.copyOfRange(HEADER.size, HEADER.size + NONCE_BYTES)
+    val cipher = Cipher.getInstance(TRANSFORMATION)
+    cipher.init(Cipher.DECRYPT_MODE, keys.requireExistingKey(), GCMParameterSpec(TAG_BITS, nonce))
+    cipher.updateAAD(HEADER)
+    return try { cipher.doFinal(envelope, HEADER.size + NONCE_BYTES, envelope.size - HEADER.size - NONCE_BYTES) }
+    catch (e: GeneralSecurityException) { throw SecurityException("Encrypted photo authentication failed", e) }
+  }
+
+  private fun validateLeaf(root: File, leaf: String, mustExist: Boolean): File {
+    require(leaf.isNotBlank() && File(leaf).name == leaf && leaf != "." && leaf != "..") { "Expected direct-child filename" }
+    val candidate = File(root, leaf)
+    if (mustExist) require(candidate.isFile) { "Input file is missing" } else require(!candidate.exists()) { "Output already exists" }
+    return candidate
+  }
+
+  private inline fun <T> withPinnedOutput(block: (File) -> T): T = withPinned(trustedOutputDir, block)
+  private inline fun <T> withPinnedRoots(block: (File, File) -> T): T {
+    return withPinned(filesDir) { input -> withPinned(trustedOutputDir) { output -> block(input, output) } }
+  }
+  private inline fun <T> withPinned(directory: File, block: (File) -> T): T {
+    val canonical = directory.canonicalFile
     val root = Os.open(canonical.path, OsConstants.O_RDONLY or OsConstants.O_CLOEXEC or OsConstants.O_NOFOLLOW, 0)
     try {
       ParcelFileDescriptor.dup(root).use { owned ->
