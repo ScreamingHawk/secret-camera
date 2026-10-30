@@ -1,6 +1,7 @@
 # Photo vault key foundation (Android only)
 
-This module provides encrypted photo operations on Android only. It does not guarantee encryption of every app photo or protect against screenshots, recipient copies, backups, rooted devices, or platform/cache behavior.
+`migrateLegacyGalleryPhotos()` is an explicit action intended for the authenticated gallery, not an automatic mount step. It scans only direct regular `.jpg`/`.jpeg` children of the fixed private gallery, one at a time, caps each file at 64 MiB, and returns migrated/remaining/failed counts with a generic error code. Each original is removed only after authenticated ciphertext matches its bytes; interrupted runs retain originals and can resume. Existing encrypted photos and unrelated metadata are left alone. This is not a backup guarantee: verified migration replaces the original in place, so preserve any separate copy you need before choosing the action.
+The migration and gallery-delete bridge share one process-wide mutation gate. Gallery screens rejoin an existing migration after remount instead of starting another one. Counts describe eligible JPEGs remaining at completion; a newly added JPEG is left for the next explicit run. A missing original is not counted as verified migration completion. The source inode and bytes are checked again before removal; exclusivity assumes cooperative app-owned mutations under this gate, not malicious code with arbitrary same-UID filesystem access. Ciphertext and its directory are synced before removal, then the directory is synced again after unlink.
 
 ## Share exports
 

@@ -5,6 +5,14 @@ export type PhotoVaultKeyLifecycle = {
   initializeNewVault(): Promise<string>;
   /** Prepares a new capture vault or refuses when initialized state lost its key. */
   prepareCaptureVault(): Promise<void>;
+  /** Explicitly migrates direct JPEGs in the trusted private gallery; never accepts a path. */
+  migrateLegacyGalleryPhotos(): Promise<{
+    migrated: number;
+    remaining: number;
+    failed: number;
+    errorCode: string | null;
+  }>;
+  deleteGalleryPhoto(filename: string): Promise<void>;
   /** Retrieves the existing key or rejects without creating/replacing it. */
   requireExistingKey(): Promise<string>;
   /** Encrypts a file directly inside the app-private filesDir. Never overwrites. */

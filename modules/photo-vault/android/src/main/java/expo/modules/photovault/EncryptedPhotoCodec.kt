@@ -48,6 +48,41 @@ internal class EncryptedPhotoCodec(
     publishExclusive(root, output.name, plaintext)
   }
 
+  internal fun migrateLegacyFile(sourceLeaf: String, beforeSourceRemoval: () -> Unit = {}): String = withPinnedRoots { root, outputRoot ->
+    require(root == outputRoot) { "Migration source and destination must share the gallery root" }
+    require((sourceLeaf.endsWith(".jpg", ignoreCase = true) || sourceLeaf.endsWith(".jpeg", ignoreCase = true)) && File(sourceLeaf).name == sourceLeaf && sourceLeaf != "." && sourceLeaf != "..") { "Expected JPEG leaf name" }
+    val destination = "legacy-${java.security.MessageDigest.getInstance("SHA-256").digest(sourceLeaf.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }}.scv"
+    val source = File(root, sourceLeaf)
+    val existingTarget = File(root, destination)
+    require(source.exists()) { "Migration source is absent" }
+    validateLeaf(root, sourceLeaf, true)
+    val sourceStat = Os.lstat(source.path)
+    require((sourceStat.st_mode and OsConstants.S_IFMT) == OsConstants.S_IFREG) { "Source must be a regular file" }
+    val original = readBounded(source, MAX_PLAINTEXT_BYTES)
+    val existing = File(root, destination)
+    if (!existing.exists()) {
+      val cipher = Cipher.getInstance(TRANSFORMATION)
+      cipher.init(Cipher.ENCRYPT_MODE, keys.requireExistingKey())
+      val nonce = cipher.iv
+      require(nonce != null && nonce.size == NONCE_BYTES) { "Unsupported AndroidKeyStore GCM nonce" }
+      cipher.updateAAD(HEADER)
+      try { publishExclusive(root, destination, HEADER + nonce + cipher.doFinal(original)) }
+      catch (failure: Exception) { if (!File(root, destination).exists()) throw failure }
+    }
+    val encrypted = readBounded(validateLeaf(root, destination, true), MAX_ENVELOPE_BYTES)
+    require(decryptAuthenticated(encrypted).contentEquals(original)) { "Existing migration destination does not match source" }
+    val encryptedFd = Os.open(existingTarget.path, OsConstants.O_RDONLY or OsConstants.O_CLOEXEC or OsConstants.O_NOFOLLOW, 0)
+    try { Os.fsync(encryptedFd) } finally { Os.close(encryptedFd) }
+    ParcelFileDescriptor.fromFd(root.name.toInt()).use { Os.fsync(it.fileDescriptor) }
+    beforeSourceRemoval()
+    val currentStat = Os.lstat(source.path)
+    require(currentStat.st_dev == sourceStat.st_dev && currentStat.st_ino == sourceStat.st_ino) { "Source changed during migration" }
+    require(readBounded(source, MAX_PLAINTEXT_BYTES).contentEquals(original)) { "Source changed during migration" }
+    Os.remove(source.path)
+    ParcelFileDescriptor.fromFd(root.name.toInt()).use { Os.fsync(it.fileDescriptor) }
+    destination
+  }
+
   fun prepareView(encryptedLeaf: String): File {
     return prepareAuthenticated(encryptedLeaf, "view-${UUID.randomUUID()}.jpg")
   }

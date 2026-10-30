@@ -23,6 +23,7 @@ jest.mock('../modules/photo-vault/src/PhotoVault', () => ({
     prepareEncryptedPhotoView: jest.fn(),
     releaseEncryptedPhotoView: jest.fn(),
     initializeNewVault: jest.fn(),
+    deleteGalleryPhoto: jest.fn(),
   },
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
@@ -50,7 +51,7 @@ jest.mock('react-native', () => ({
 }));
 
 const readDir = jest.mocked(FileSystem.readDirectoryAsync);
-const del = jest.mocked(FileSystem.deleteAsync);
+const del = jest.mocked(PhotoVault.deleteGalleryPhoto);
 const prepare = jest.mocked(PhotoVault.prepareEncryptedPhotoView);
 const release = jest.mocked(PhotoVault.releaseEncryptedPhotoView);
 const share = jest.mocked(Sharing.shareAsync);
@@ -144,7 +145,7 @@ test('selected encrypted photo deletion targets source file, not prepared cache 
   // Order in ImageView: previous, next, share, delete, close.
   expect(buttons).toHaveLength(5);
   await act(async () => buttons[3].props.onPress());
-  expect(del).toHaveBeenCalledWith(encrypted);
+  expect(del).toHaveBeenCalledWith('secret.scv');
   expect(del).not.toHaveBeenCalledWith(viewUri);
   unmount(r);
 });

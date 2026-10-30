@@ -85,6 +85,17 @@ class PhotoVaultModule : Module() {
 
     AsyncFunction("prepareCaptureVault") { captureCoordinator().prepareCaptureVault() }
 
+    AsyncFunction("migrateLegacyGalleryPhotos") {
+      val capture = captureCoordinator()
+      LegacyPhotoMigrator(galleryDir(), capture) {
+        EncryptedPhotoCodec(galleryDir(), keys, trustedOutputDir = galleryDir())
+      }.migrate().let { mapOf("migrated" to it.migrated, "remaining" to it.remaining, "failed" to it.failed, "errorCode" to it.errorCode) }
+    }
+
+    AsyncFunction("deleteGalleryPhoto") { filename: String ->
+      PhotoMutationGate.deleteGalleryPhoto(galleryDir(), filename)
+    }
+
     AsyncFunction("requireExistingKey") {
       keys.requireExistingKey()
       VaultKeyStore.DEFAULT_ALIAS
