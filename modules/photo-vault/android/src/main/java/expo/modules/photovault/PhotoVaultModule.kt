@@ -7,6 +7,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 
 class PhotoVaultModule : Module() {
   private val keys = VaultKeyStore()
+
   private val context get() = appContext.reactContext!!
 
   private fun cleanViewCache() {
@@ -17,6 +18,7 @@ class PhotoVaultModule : Module() {
   private fun galleryDir() = File(context.filesDir, ".secret-camera")
   private fun viewDir() = File(context.cacheDir, "photo-vault-views")
   private fun viewCodec() = EncryptedPhotoCodec(galleryDir(), keys, trustedOutputDir = viewDir())
+  private fun captureCoordinator() = CaptureCoordinator(context.filesDir, File(context.cacheDir, ".secret-camera"), galleryDir(), viewDir(), keys)
 
   private fun prepareView(filename: String): String {
     require(filename.isNotBlank() && File(filename).name == filename && filename != "." && filename != "..") { "Expected encrypted photo filename" }
@@ -35,6 +37,8 @@ class PhotoVaultModule : Module() {
       VaultKeyStore.DEFAULT_ALIAS
     }
 
+    AsyncFunction("prepareCaptureVault") { captureCoordinator().prepareCaptureVault() }
+
     AsyncFunction("requireExistingKey") {
       keys.requireExistingKey()
       VaultKeyStore.DEFAULT_ALIAS
@@ -42,6 +46,11 @@ class PhotoVaultModule : Module() {
 
     AsyncFunction("encryptFile") { inputPath: String, outputPath: String ->
       codec().encrypt(inputPath, outputPath)
+    }
+
+    AsyncFunction("encryptCapturedPhoto") { inputPath: String ->
+      val result = captureCoordinator().save(File(inputPath))
+      mapOf("filename" to result.filename, "sourceRemoved" to result.sourceRemoved)
     }
 
     AsyncFunction("decryptFile") { inputPath: String, outputPath: String ->

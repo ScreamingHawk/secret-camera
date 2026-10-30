@@ -152,6 +152,29 @@ class EncryptedPhotoCodecInstrumentedTest {
   }
 
   @Test
+  fun encryptPinsSeparateOutputDirectoryBeforeValidationHookCanSwapItsPath() = withFixture { dir, _, alias ->
+    val source = File(dir, "input.jpg").apply { writeText("trusted camera bytes") }
+    val output = File(dir.parentFile, "output-${UUID.randomUUID()}").apply { mkdir() }
+    val moved = File(dir.parentFile, "output-moved-${UUID.randomUUID()}")
+    val redirect = File(dir.parentFile, "output-redirect-${UUID.randomUUID()}").apply { mkdir() }
+    val name = "captured.scv"
+    val racing = EncryptedPhotoCodec(dir, VaultKeyStore(alias), trustedOutputDir = output, afterPathValidation = {
+      check(output.renameTo(moved))
+      android.system.Os.symlink(redirect.path, output.path)
+    })
+    try {
+      racing.encrypt(source.path, File(output, name).path)
+      assertTrue(File(moved, name).isFile)
+      assertFalse(File(redirect, name).exists())
+      assertFalse(File(moved, name).readBytes().contentEquals(source.readBytes()))
+    } finally {
+      output.delete()
+      moved.deleteRecursively()
+      redirect.deleteRecursively()
+    }
+  }
+
+  @Test
   fun preparesAndReleasesAuthenticatedPrivateViewWithoutPublishingFailures() = withFixture { dir, codec, alias ->
     val gallery = File(dir, "gallery").apply { mkdir() }
     val cache = File(dir, "private-view-cache").apply { mkdir() }
@@ -172,6 +195,44 @@ class EncryptedPhotoCodecInstrumentedTest {
     assertTrue(cache.listFiles()!!.isEmpty())
     assertThrows(Exception::class.java) { viewCodec.prepareView("missing.scv") }
     assertTrue(cache.listFiles()!!.isEmpty())
+  }
+
+  @Test
+  fun encryptsPrivateCameraCacheIntoGalleryAndValidatesBeforeSourceRemoval() {
+    val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+    val base = File(context.cacheDir, "capture-test-${UUID.randomUUID()}").apply { mkdir() }
+    val camera = File(base, "camera").apply { mkdir() }
+    val gallery = File(base, "gallery").apply { mkdir() }
+    val views = File(base, "views").apply { mkdir() }
+    val alias = "secret-camera.capture-test.${UUID.randomUUID()}"
+    val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+    try {
+      VaultKeyStore(alias).initializeNewVault()
+      val bytes = ByteArray(4096) { (it % 233).toByte() }
+      val source = File(camera, "capture.jpg").apply { writeBytes(bytes) }
+      val name = "photo-${UUID.randomUUID()}.scv"
+      EncryptedPhotoCodec(camera, VaultKeyStore(alias), trustedOutputDir = gallery).encrypt(source.path, File(gallery, name).path)
+      val encrypted = File(gallery, name)
+      assertTrue(encrypted.isFile)
+      assertFalse(encrypted.readBytes().contentEquals(bytes))
+      val view = EncryptedPhotoCodec(gallery, VaultKeyStore(alias), trustedOutputDir = views).prepareView(name)
+      assertArrayEquals(bytes, view.readBytes())
+      view.delete()
+      source.delete()
+      assertFalse(source.exists())
+
+      val retained = File(camera, "recoverable.jpg").apply { writeBytes(bytes) }
+      store.deleteEntry(alias)
+      assertThrows(Exception::class.java) {
+        EncryptedPhotoCodec(camera, VaultKeyStore(alias), trustedOutputDir = gallery).encrypt(retained.path, File(gallery, "missing-key.scv").path)
+      }
+      assertTrue("failed encryption must retain source", retained.isFile)
+      assertFalse(File(gallery, "missing-key.scv").exists())
+      assertFalse(store.containsAlias(alias))
+    } finally {
+      store.deleteEntry(alias)
+      base.deleteRecursively()
+    }
   }
 
   private fun withFixture(block: (File, EncryptedPhotoCodec, String) -> Unit) {

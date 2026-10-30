@@ -1,9 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraType, CameraView as ExpoCameraView } from 'expo-camera';
-import * as FileSystem from 'expo-file-system';
+
 import { useEffect, useRef, useState } from 'react';
-import { BackHandler, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { APP_DIRECTORY } from '../constants';
+import {
+  BackHandler,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
+import PhotoVault from '../../modules/photo-vault/src/PhotoVault';
 import { savePhoto } from '../utils/security';
 
 interface CameraViewProps {
@@ -13,16 +20,27 @@ interface CameraViewProps {
 export default function CameraView({ onClose }: CameraViewProps) {
   const [facing, setFacing] = useState<CameraType>('back');
   const cameraRef = useRef<ExpoCameraView>(null);
+  const savingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const readyRef = useRef(false);
+  const [captureStatus, setCaptureStatus] = useState<
+    'failed' | 'cleanup' | null
+  >(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
-      const dirInfo = await FileSystem.getInfoAsync(
-        APP_DIRECTORY.SECRET_CAMERA
-      );
-      if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(APP_DIRECTORY.SECRET_CAMERA, {
-          intermediates: true,
-        });
+      try {
+        await PhotoVault.prepareCaptureVault();
+        readyRef.current = true;
+      } catch {
+        if (mountedRef.current) setCaptureStatus('failed');
       }
     })();
   }, []);
@@ -44,26 +62,38 @@ export default function CameraView({ onClose }: CameraViewProps) {
   }
 
   async function takePicture() {
-    if (cameraRef.current) {
+    if (savingRef.current || !readyRef.current || !cameraRef.current) {
+      if (!readyRef.current && mountedRef.current) setCaptureStatus('failed');
+      return;
+    }
+    savingRef.current = true;
+    setCaptureStatus(null);
+    try {
       const photo = await cameraRef.current.takePictureAsync();
       if (!photo) {
-        console.error('No photo captured');
+        if (mountedRef.current) setCaptureStatus('failed');
         return;
       }
-
-      const filename = `photo_${Date.now()}.jpg`;
-      try {
-        await savePhoto(photo.uri, filename);
-        console.log('Photo saved successfully');
-      } catch (error) {
-        console.error('Error saving photo:', error);
-      }
+      const result = await savePhoto(photo.uri);
+      if (!result.sourceRemoved && mountedRef.current)
+        setCaptureStatus('cleanup');
+    } catch {
+      if (mountedRef.current) setCaptureStatus('failed');
+    } finally {
+      savingRef.current = false;
     }
   }
 
   return (
     <ExpoCameraView ref={cameraRef} style={styles.camera} facing={facing}>
       <View style={styles.buttonContainer}>
+        {captureStatus && (
+          <Text style={styles.error}>
+            {captureStatus === 'cleanup'
+              ? 'Photo saved, but cleanup was incomplete'
+              : 'Photo could not be saved'}
+          </Text>
+        )}
         <TouchableOpacity
           style={styles.iconButton}
           onPress={toggleCameraFacing}
@@ -106,6 +136,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  error: {
+    position: 'absolute',
+    bottom: 90,
+    alignSelf: 'center',
+    color: 'white',
+    backgroundColor: '#900',
+    padding: 8,
   },
   captureButtonInner: {
     width: 60,

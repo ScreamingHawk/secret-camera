@@ -17,9 +17,9 @@ internal class EncryptedPhotoCodec(
   private val trustedOutputDir: File = filesDir,
   private val afterPathValidation: () -> Unit = {}
 ) {
-  fun encrypt(inputPath: String, outputPath: String) = withPinned(filesDir) { root ->
+  fun encrypt(inputPath: String, outputPath: String) = withPinnedRoots { root, outputRoot ->
     val input = validatePath(inputPath, mustExist = true)
-    val output = validatePath(outputPath, mustExist = false)
+    val output = validateOutputPath(outputPath)
     check(input != output) { "Input and output must differ" }
     afterPathValidation()
     val plain = readBounded(File(root, input.name), MAX_PLAINTEXT_BYTES)
@@ -28,7 +28,7 @@ internal class EncryptedPhotoCodec(
     val nonce = cipher.iv
     require(nonce != null && nonce.size == NONCE_BYTES) { "Unsupported AndroidKeyStore GCM nonce" }
     cipher.updateAAD(HEADER)
-    publishExclusive(root, output.name, HEADER + nonce + cipher.doFinal(plain))
+    publishExclusive(outputRoot, output.name, HEADER + nonce + cipher.doFinal(plain))
   }
 
   fun decrypt(inputPath: String, outputPath: String) = withPinned(filesDir) { root ->
@@ -89,7 +89,11 @@ internal class EncryptedPhotoCodec(
 
   private inline fun <T> withPinnedOutput(block: (File) -> T): T = withPinned(trustedOutputDir, block)
   private inline fun <T> withPinnedRoots(block: (File, File) -> T): T {
-    return withPinned(filesDir) { input -> withPinned(trustedOutputDir) { output -> block(input, output) } }
+    return if (filesDir.canonicalFile == trustedOutputDir.canonicalFile) {
+      withPinned(filesDir) { root -> block(root, root) }
+    } else {
+      withPinned(filesDir) { input -> withPinned(trustedOutputDir) { output -> block(input, output) } }
+    }
   }
   private inline fun <T> withPinned(directory: File, block: (File) -> T): T {
     val canonical = directory.canonicalFile
@@ -138,6 +142,16 @@ internal class EncryptedPhotoCodec(
     }
     if (mustExist) require(canonical.isFile && canonical.length() <= MAX_ENVELOPE_BYTES) { "Input file is missing or too large" }
     else require(!canonical.exists()) { "Output already exists" }
+    return canonical
+  }
+
+  private fun validateOutputPath(path: String): File {
+    require(path.isNotBlank()) { "Path is required" }
+    val candidate = File(path)
+    require(candidate.isAbsolute && candidate.toPath().toAbsolutePath().normalize().toFile() == candidate.canonicalFile) { "Symlink paths are not allowed" }
+    val canonical = candidate.canonicalFile
+    require(canonical.parentFile == trustedOutputDir.canonicalFile) { "Output path must be directly inside trusted vault directory" }
+    require(!canonical.exists()) { "Output already exists" }
     return canonical
   }
 
