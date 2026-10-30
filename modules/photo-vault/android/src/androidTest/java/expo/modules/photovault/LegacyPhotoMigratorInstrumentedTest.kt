@@ -42,7 +42,9 @@ class LegacyPhotoMigratorInstrumentedTest {
     codec.decrypt(File(dir, target).path, restored.path)
     assertArrayEquals(bytes, restored.readBytes())
     val snapshot = File(dir, target).readBytes()
-    assertEquals(target, EncryptedPhotoCodec(dir, VaultKeyStore(alias)).migrateLegacyFile(source.name))
+    assertThrows(IllegalArgumentException::class.java) {
+      EncryptedPhotoCodec(dir, VaultKeyStore(alias)).migrateLegacyFile(source.name)
+    }
     assertArrayEquals(snapshot, File(dir, target).readBytes())
   }
 
@@ -122,8 +124,12 @@ class LegacyPhotoMigratorInstrumentedTest {
       val deletion = Thread { deleteStarted.countDown(); try { PhotoMutationGate.deleteGalleryPhoto(dir, source.name) } catch (t: Throwable) { deleteError.set(t) } finally { deleteDone.countDown() } }
       deletion.start(); assertTrue(deleteStarted.await(5, TimeUnit.SECONDS)); assertFalse(deleteDone.await(200, TimeUnit.MILLISECONDS))
       release.countDown(); migration.join(5000); deletion.join(5000)
-      assertFalse(migration.isAlive); assertFalse(deletion.isAlive); assertNull(migrationError.get()); assertNull(deleteError.get())
+      assertFalse(migration.isAlive); assertFalse(deletion.isAlive); assertNull(migrationError.get())
+      assertTrue("queued deletion must refuse an original already removed by verified migration", deleteError.get() is IllegalArgumentException)
       assertEquals(1, result.get()!!.migrated); assertFalse(source.exists())
+      val restored = File(dir, "verified-after-contention.bin")
+      EncryptedPhotoCodec(dir, VaultKeyStore(alias)).decrypt(File(dir, deterministic(source.name)).path, restored.path)
+      assertArrayEquals(ByteArray(128) { it.toByte() }, restored.readBytes())
     } finally { release.countDown(); root.deleteRecursively() }
   }
 
