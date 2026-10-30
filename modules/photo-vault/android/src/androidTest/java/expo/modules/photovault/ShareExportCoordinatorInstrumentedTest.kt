@@ -49,7 +49,7 @@ class ShareExportCoordinatorInstrumentedTest {
   @Test
   fun persistedExpirySurvivesRestartAndCorruptOrMissingSidecarGetsSafeFallback() = withFixture { base, _ ->
     val root = File(base, "exports").apply { mkdir() }
-    var now = 50_000L
+    var now = 1_700_000_000_000L
     val first = ShareExportCoordinator(root, { now }, RETENTION)
     val persisted = first.prepare { newExport(root) }
     now += RETENTION - 1
@@ -119,9 +119,10 @@ class ShareExportCoordinatorInstrumentedTest {
     assertTrue(exports.listFiles()!!.isEmpty())
 
     encrypted.writeBytes(ByteArray(0))
-    codec.encrypt(source.path, encrypted.path)
+    val recoveredEncrypted = File(gallery, "photo-recovered.scv")
+    codec.encrypt(source.path, recoveredEncrypted.path)
     KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry(alias) }
-    assertThrows(Exception::class.java) { coordinator.prepare { exportCodec.prepareShare(encrypted.name) } }
+    assertThrows(Exception::class.java) { coordinator.prepare { exportCodec.prepareShare(recoveredEncrypted.name) } }
     assertTrue("key loss must not publish plaintext", exports.listFiles()!!.isEmpty())
   }
 

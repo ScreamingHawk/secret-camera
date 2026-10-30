@@ -11,7 +11,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.Base64
+
 import java.util.UUID
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -61,7 +61,7 @@ class ShareReceiverInstrumentedTest {
       uri = FileProvider.getUriForFile(context, authority, exported)
 
       // Establish that shell really is a distinct, unprivileged package before any grant.
-      assertFalse("shell unexpectedly reads without a URI grant", shellRead(uri!!).contentEquals(jpeg))
+      assertFalse("shell unexpectedly reads without a URI grant", shellRead(uri!!).bytes?.contentEquals(jpeg) == true)
       val shareIntent = Intent(Intent.ACTION_SEND).apply {
         type = "image/jpeg"
         putExtra(Intent.EXTRA_STREAM, uri)
@@ -75,7 +75,8 @@ class ShareReceiverInstrumentedTest {
 
       context.grantUriPermission(shellPackage, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
       granted = true
-      val received = shellRead(uri!!) ?: throw AssertionError("shell read failed after URI grant")
+      val readResult = shellRead(uri!!)
+      val received = readResult.bytes ?: throw AssertionError("shell read failed after URI grant: ${readResult.diagnostic}")
       assertArrayEquals("shell UID must receive the original JPEG bytes", jpeg, received)
       val decoded = BitmapFactory.decodeByteArray(received, 0, received.size)
       assertNotNull("received bytes are not a decodable JPEG", decoded)
@@ -84,14 +85,14 @@ class ShareReceiverInstrumentedTest {
       decoded.recycle()
 
       // FileProvider's openFile mode is read-only. This real cross-UID write must fail.
-      val writeResult = shellWrite(uri!!, jpeg)
-      assertFalse("shell UID unexpectedly wrote through the read-only URI: $writeResult", writeResult)
+      val writeResult = shellWrite(uri!!, "synthetic-write-probe".toByteArray())
+      assertArrayEquals("shell UID write must not alter exported bytes: ${writeResult.diagnostic}", jpeg, exported.readBytes())
       assertArrayEquals("failed write changed exported bytes", jpeg, exported.readBytes())
       assertTrue("ciphertext source must remain intact", encrypted.isFile)
 
       context.revokeUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
       granted = false
-      assertFalse("revoked grant still permits shell read", shellRead(uri!!).contentEquals(jpeg))
+      assertFalse("revoked grant still permits shell read", shellRead(uri!!).bytes?.contentEquals(jpeg) == true)
       // A completed chooser handoff does not delete a leased export; TTL cleanup owns it.
       assertTrue("export was deleted before lease cleanup", exported.isFile)
       assertTrue(exported.delete())
@@ -103,25 +104,32 @@ class ShareReceiverInstrumentedTest {
     }
   }
 
-  private fun shellRead(uri: Uri): ByteArray? {
+  private data class ShellRead(val bytes: ByteArray?, val diagnostic: String)
+
+  private fun shellRead(uri: Uri): ShellRead {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     return try {
-      instrumentation.uiAutomation.executeShellCommand("content read --uri '${uri}'").use { descriptor ->
-        ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() }
-      }
-    } catch (_: Exception) { null }
+      val (stdout, stdin, stderr) = instrumentation.uiAutomation.executeShellCommandRwe("content read --uri $uri")
+      stdin.close()
+      val bytes = ParcelFileDescriptor.AutoCloseInputStream(stdout).use { it.readBytes() }
+      val error = ParcelFileDescriptor.AutoCloseInputStream(stderr).use { it.readBytes() }
+      ShellRead(bytes, "stderr=${String(error)}")
+    } catch (e: Exception) { ShellRead(null, e.javaClass.simpleName + ": " + e.message) }
   }
 
-  private fun shellWrite(uri: Uri, bytes: ByteArray): Boolean {
+  private fun shellWrite(uri: Uri, bytes: ByteArray): ShellRead {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
-    val encoded = Base64.getEncoder().encodeToString(bytes)
     return try {
-      val result = instrumentation.uiAutomation.executeShellCommand(
-        "echo '$encoded' | base64 -d | content write --uri '${uri}' 2>&1; echo EXIT:\$?"
-      ).use { descriptor -> ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() } }
-      String(result).contains("EXIT:0")
-    } catch (_: Exception) {
-      false
-    }
+      val (stdout, stdin, stderr) = instrumentation.uiAutomation.executeShellCommandRwe("content write --uri $uri")
+      try {
+        ParcelFileDescriptor.AutoCloseOutputStream(stdin).use { it.write(bytes) }
+      } catch (_: java.io.IOException) {
+        // A permission-denied receiver may close its input pipe before consuming it.
+        stdin.close()
+      }
+      val output = ParcelFileDescriptor.AutoCloseInputStream(stdout).use { it.readBytes() }
+      val error = ParcelFileDescriptor.AutoCloseInputStream(stderr).use { it.readBytes() }
+      ShellRead(output, "stderr=${String(error)}")
+    } catch (e: Exception) { ShellRead(null, e.javaClass.simpleName + ": " + e.message) }
   }
 }
