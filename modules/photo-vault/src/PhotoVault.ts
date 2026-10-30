@@ -19,6 +19,16 @@ export type PhotoVaultKeyLifecycle = {
   prepareEncryptedPhotoView(filename: string): Promise<string>;
   /** Idempotently removes a URI previously returned by prepareEncryptedPhotoView. */
   releaseEncryptedPhotoView(viewUri: string): Promise<void>;
+  /** Authenticates one gallery leaf into a separate private export retained for up to one hour. */
+  prepareEncryptedPhotoShare(filename: string): Promise<string>;
+  /** Removes only expired exports owned by the module. */
+  cleanupEncryptedPhotoShares(): Promise<void>;
+  /** Immediately removes an owned export only before handoff. */
+  abandonOwnedShare(uri: string): Promise<void>;
+  /** Protects an owned export from cleanup during a pending native share flow. */
+  beginEncryptedPhotoShare(uri: string): Promise<void>;
+  /** Ends protection and retains the handed-off file for one hour. */
+  finishEncryptedPhotoShare(uri: string): Promise<void>;
   /**
    * Both file operations resolve paths only against the app-private filesDir;
    * each operation pins that directory and rejects swapped parent/symlinked leaves.

@@ -1,6 +1,12 @@
 # Photo vault key foundation (Android only)
 
-This module is a key-lifecycle foundation only. **It does not encrypt existing or newly captured app photos.** The app is not currently protected at rest by this module.
+This module provides encrypted photo operations on Android only. It does not guarantee encryption of every app photo or protect against screenshots, recipient copies, backups, rooted devices, or platform/cache behavior.
+
+## Share exports
+
+`prepareEncryptedPhotoShare(filename)` authenticates one encrypted gallery leaf and writes a distinct JPEG under app cache `photo-vault-shares`; it never shares a private `.scv` view URI. Unhanded exports can be removed with `abandonOwnedShare(uri)`. Call `beginEncryptedPhotoShare(uri)` before platform handoff and `finishEncryptedPhotoShare(uri)` when the share promise settles. The lease avoids in-process cleanup while pending and sets a persisted one-hour expiry at settlement. Handed-off exports are not deleted on cancel/error because a receiver may still be reading them.
+
+Cleanup runs at startup, foreground entry, before preparation, and every 15 minutes while the module lives. Persisted expiry survives process restart; only strict `share-<UUID>.jpg` names are eligible. This is best-effort cache retention, not secure erasure; Android may evict cache sooner, and recipients control copies. Expo Sharing grants chooser targets read access via its FileProvider.
 
 ## Native contract
 

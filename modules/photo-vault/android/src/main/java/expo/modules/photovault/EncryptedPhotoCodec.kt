@@ -49,8 +49,16 @@ internal class EncryptedPhotoCodec(
   }
 
   fun prepareView(encryptedLeaf: String): File {
+    return prepareAuthenticated(encryptedLeaf, "view-${UUID.randomUUID()}.jpg")
+  }
+
+  fun prepareShare(encryptedLeaf: String): File {
+    return prepareAuthenticated(encryptedLeaf, "share-${UUID.randomUUID()}.jpg")
+  }
+
+  private fun prepareAuthenticated(encryptedLeaf: String, outputName: String): File {
     require(encryptedLeaf.isNotBlank() && File(encryptedLeaf).name == encryptedLeaf && encryptedLeaf != "." && encryptedLeaf != "..") { "Expected encrypted photo leaf name" }
-    val outputName = "view-${UUID.randomUUID()}.jpg"
+
     withPinnedRoots { inputRoot, outputRoot ->
       val input = validateLeaf(inputRoot, encryptedLeaf, true)
       afterPathValidation()

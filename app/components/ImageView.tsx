@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Sharing from 'expo-sharing';
+import { useEffect, useRef } from 'react';
 import {
+  AppState,
   Dimensions,
   Image,
   StyleSheet,
@@ -8,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import PhotoVault from '../../modules/photo-vault/src/PhotoVault';
 import { usePhotoView } from '../utils/encryptedPhotoView';
 
 interface ImageViewProps {
@@ -27,29 +30,72 @@ export default function ImageView({
   onPrevious,
   onShareState,
 }: ImageViewProps) {
-  const { view, error, encrypted } = usePhotoView(uri);
+  const { view, error } = usePhotoView(uri);
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
+  const sharing = useRef(false);
+  const mounted = useRef(true);
+  const handed = useRef(false);
+  const shareError = useRef<string | null>(null);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const handleShare = async () => {
-    if (encrypted) return;
+    if (sharing.current) return;
+    sharing.current = true;
+    const source = uri;
+    let exportUri: string | undefined;
     onShareState(true);
     try {
       const isAvailable = await Sharing.isAvailableAsync();
-      if (!isAvailable) {
-        console.error('Sharing is not available on this platform');
-        return;
+      if (!isAvailable) return;
+      if (source.toLowerCase().endsWith('.scv')) {
+        exportUri = await PhotoVault.prepareEncryptedPhotoShare(
+          source.split('/').pop()!
+        );
+        if (!mounted.current || AppState.currentState !== 'active') {
+          await PhotoVault.abandonOwnedShare(exportUri);
+          return;
+        }
+        await PhotoVault.beginEncryptedPhotoShare(exportUri);
+        if (!mounted.current || AppState.currentState !== 'active') {
+          await PhotoVault.abandonOwnedShare(exportUri);
+          return;
+        }
+        handed.current = true;
+        await Sharing.shareAsync(exportUri, {
+          dialogTitle: 'Share Image',
+          mimeType: 'image/jpeg',
+          UTI: 'public.jpeg',
+        });
+      } else if (mounted.current && AppState.currentState === 'active') {
+        await Sharing.shareAsync(source, {
+          dialogTitle: 'Share Image',
+          mimeType: 'image/jpeg',
+          UTI: 'public.jpeg',
+        });
       }
-
-      await Sharing.shareAsync(uri, {
-        dialogTitle: 'Share Image',
-        mimeType: 'image/jpeg',
-        UTI: 'public.jpeg',
-      });
-    } catch (error) {
-      console.error('Unable to share image');
+    } catch {
+      shareError.current = 'Unable to share image';
+      if (mounted.current) console.error('Unable to share image');
     } finally {
-      onShareState(false);
+      try {
+        if (exportUri && handed.current) {
+          try {
+            await PhotoVault.finishEncryptedPhotoShare(exportUri);
+          } catch {
+            console.error('Unable to finalize encrypted photo share');
+          }
+        }
+      } finally {
+        handed.current = false;
+        sharing.current = false;
+        onShareState(false);
+      }
     }
   };
 
@@ -84,17 +130,13 @@ export default function ImageView({
         <TouchableOpacity
           style={styles.iconButton}
           onPress={handleShare}
-          disabled={encrypted}
-          accessibilityLabel={
-            encrypted
-              ? 'Sharing encrypted photos is not available'
-              : 'Share image'
-          }
+          disabled={sharing.current}
+          accessibilityLabel="Share image"
         >
           <Ionicons
             name="share-outline"
             size={32}
-            color={encrypted ? '#777' : 'white'}
+            color={sharing.current ? '#777' : 'white'}
           />
         </TouchableOpacity>
         <View style={styles.rightButtons}>

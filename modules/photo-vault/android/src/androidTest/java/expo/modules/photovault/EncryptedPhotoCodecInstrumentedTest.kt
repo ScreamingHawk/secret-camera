@@ -6,6 +6,7 @@ import java.security.KeyStore
 import java.util.UUID
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -172,6 +173,25 @@ class EncryptedPhotoCodecInstrumentedTest {
       moved.deleteRecursively()
       redirect.deleteRecursively()
     }
+  }
+
+  @Test
+  fun preparesAndCleansBoundedShareExportWithoutTouchingSource() = withFixture { dir, _, alias ->
+    val gallery = File(dir, "share-gallery").apply { mkdir() }
+    val exports = File(dir, "share-exports").apply { mkdir() }
+    val jpeg = android.graphics.Bitmap.createBitmap(3, 2, android.graphics.Bitmap.Config.ARGB_8888)
+    val bytes = java.io.ByteArrayOutputStream().also { jpeg.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }.toByteArray()
+    val source = File(gallery, "selected.scv")
+    EncryptedPhotoCodec(dir, VaultKeyStore(alias), trustedOutputDir = gallery).encrypt(File(dir, "source.jpg").apply { writeBytes(bytes) }.path, source.path)
+    val codec = EncryptedPhotoCodec(gallery, VaultKeyStore(alias), trustedOutputDir = exports)
+    val export = codec.prepareShare(source.name)
+    assertTrue(export.name.matches(Regex("share-[0-9a-f-]{36}\\.jpg")))
+    assertArrayEquals(bytes, export.readBytes())
+    assertTrue(source.isFile)
+    val selected = android.graphics.BitmapFactory.decodeFile(export.path)
+    assertEquals(3, selected.width)
+    assertEquals(2, selected.height)
+    assertTrue(export.exists())
   }
 
   @Test

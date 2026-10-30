@@ -27,6 +27,7 @@ jest.mock('../modules/photo-vault/src/PhotoVault', () => ({
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native', () => ({
+  AppState: { currentState: 'active' },
   View: 'View',
   Text: 'Text',
   Image: 'Image',
