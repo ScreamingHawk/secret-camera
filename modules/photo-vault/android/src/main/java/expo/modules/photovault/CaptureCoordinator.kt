@@ -29,7 +29,8 @@ internal class CaptureCoordinator(
     ensureDir(galleryDir)
     val galleryEntries = galleryDir.listFiles() ?: error("Encrypted gallery unavailable")
     val marked = marker.exists()
-    if (marked || galleryEntries.isNotEmpty()) {
+    val hasEncryptedEntry = galleryEntries.any { it.isFile && it.name.endsWith(".scv", ignoreCase = true) }
+    if (marked || hasEncryptedEntry) {
       keys.requireExistingKey()
       if (!marked) createMarker()
       return
