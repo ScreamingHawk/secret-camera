@@ -16,7 +16,14 @@ internal class ShareExportCoordinator(
   private fun expiry(file: File): Long {
     val value = try { sidecar(file).readText().toLongOrNull() } catch (_: Exception) { null }
     val t = now()
-    return if (value == null || value < 0 || value > t + retentionMs) (file.lastModified().coerceAtMost(t) + retentionMs) else value
+    if (value == null || value < 0 || value > t + retentionMs) {
+      // Unknown metadata cannot establish that a recipient's read window expired.
+      // Persist one conservative grace window so later cleanup is still bounded.
+      val fallback = t + retentionMs
+      persist(file, fallback)
+      return fallback
+    }
+    return value
   }
   private fun persist(file: File, until: Long) {
     val tmp = File(root, file.name + ".expiry.tmp")
