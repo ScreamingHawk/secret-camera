@@ -21,7 +21,8 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "allowBackup": false
     },
     "web": {
       "bundler": "metro",
@@ -30,6 +31,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withVaultBackupRules",
       [
         "expo-splash-screen",
         {

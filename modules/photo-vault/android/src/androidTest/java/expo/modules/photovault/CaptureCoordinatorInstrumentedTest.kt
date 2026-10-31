@@ -55,6 +55,26 @@ class CaptureCoordinatorInstrumentedTest {
     }
   }
 
+  @Test fun encryptedVaultWithLostKeyPreservesMarkerAndCiphertextWithoutReplacement() {
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val root = File(context.cacheDir, "lost-key-data-${UUID.randomUUID()}").apply { mkdir() }
+    val alias = "secret-camera.lost-data.${UUID.randomUUID()}"
+    val marker = File(root, "initialized").apply { writeText("initialized") }
+    val ciphertext = byteArrayOf(0x53, 0x43, 0x50, 0x48, 1, 9, 8, 7)
+    try {
+      val gallery = File(root, "gallery").apply { mkdir() }
+      val encrypted = File(gallery, "existing.scv").apply { writeBytes(ciphertext) }
+      val coordinator = CaptureCoordinator(root, File(root, "camera"), gallery, File(root, "views"), VaultKeyStore(alias), marker)
+      assertThrows(IllegalStateException::class.java) { coordinator.prepareCaptureVault() }
+      assertTrue(marker.isFile)
+      assertArrayEquals(ciphertext, encrypted.readBytes())
+      assertFalse(KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.containsAlias(alias))
+    } finally {
+      KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry(alias) }
+      root.deleteRecursively()
+    }
+  }
+
   @Test fun invalidCaptureRetainsOnlyOriginalPlaintextAndRemovesFailedCiphertext() {
     val context = InstrumentationRegistry.getInstrumentation().targetContext
     val root = File(context.cacheDir, "invalid-capture-${UUID.randomUUID()}").apply { mkdir() }

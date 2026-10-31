@@ -36,12 +36,15 @@ export default function AboutView({ onClose }: AboutViewProps) {
           resizeMode="contain"
         />
         <Text style={styles.description}>
-          A secure camera application that lets you capture and store photos
-          privately. All your photos are protected with biometric authentication
-          and stored in a secure directory.
+          Photos captured on Android are encrypted in app-private storage with a
+          device-bound Android Keystore key. Device biometrics or the device
+          credential gate app access; neither unlocks or recovers the key. There
+          is no backup or recovery: losing the key makes encrypted photos
+          inaccessible. Sharing creates a temporary plaintext JPEG that the
+          receiving app may retain.
         </Text>
         <Text style={styles.subtitle}>Features:</Text>
-        <Text style={styles.feature}>• Biometric authentication</Text>
+        <Text style={styles.feature}>• Device authentication</Text>
         <Text style={styles.feature}>• Front and back camera support</Text>
         <Text style={styles.feature}>• Secure photo storage</Text>
         <Text style={styles.feature}>• Private gallery viewer</Text>

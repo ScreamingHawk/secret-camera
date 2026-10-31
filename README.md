@@ -1,15 +1,23 @@
 # Secret Camera App 📸
 
-A secure camera application built with Expo that allows you to take and store photos in a private directory.
+An Android camera application built with Expo that stores captured photos as authenticated encrypted files in app-private storage.
 
 ## Features
 
-- 🔑 Biometric authentication (fingerprint or face)
+- 🔑 Device authentication (biometrics or device credential) gates app access
 - 📱 Take photos using front or back camera
-- 🔒 Store photos in a secure, private directory
+- 🔒 Encrypt stored photos with an Android Keystore AES-256-GCM key
 - 🖼️ View photos in a gallery interface
 - 📤 Share photos directly from the viewer
-- 📱 Cross-platform support for iOS and Android
+- 📱 Android only; iOS vault support is not implemented
+
+## Vault, sharing and recovery
+
+Captured photos are encrypted on-device. The non-exportable key stays in Android Keystore; it is not tied to biometric authentication under the current key policy. Android cloud backup and device transfer explicitly exclude app data, including encrypted photos and temporary plaintext cache files, because restoring ciphertext without its device-bound key would be unusable. There is no cloud backup, key export, recovery password, or restore mechanism.
+
+Uninstalling the app removes its private photos and key. Moving to another device does not move the key or vault. Changing enrolled biometrics does not by itself invalidate this key because the key does not require biometric authorization; if Android Keystore nevertheless reports the key missing or unusable (for example after device/security-state changes), the app refuses to replace it for an existing vault. The encrypted photos then cannot be recovered. Keep any photos you need elsewhere before uninstalling or relying on this app.
+
+Sharing decrypts a selected photo into a conventional JPEG in the app cache and grants the selected share target read access. The app attempts to remove unhanded exports and expires handed-off exports after about one hour, but cache eviction/cleanup is best-effort, not secure erasure; recipients can retain copies. Viewing also uses temporary plaintext cache files, cleaned on module startup. Do not share a photo unless you accept that the receiving app may keep it.
 
 ## Getting Started
 
