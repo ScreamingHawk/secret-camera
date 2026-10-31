@@ -11,11 +11,21 @@ import {
 } from 'react-native';
 
 import PhotoVault from '../../modules/photo-vault/src/PhotoVault';
-import { savePhoto } from '../utils/security';
+import { savePhoto, type PhotoSaveStage } from '../utils/security';
 
 interface CameraViewProps {
   onClose: () => void;
 }
+
+type CaptureStatus =
+  | PhotoSaveStage
+  | 'VAULT_PREPARATION_PENDING'
+  | 'VAULT_PREPARATION_FAILED'
+  | 'CAMERA_CAPTURE_EMPTY'
+  | 'CAMERA_CAPTURE_FAILED_READY'
+  | 'CAMERA_CAPTURE_FAILED_NOT_READY'
+  | 'SAVE_FAILED'
+  | 'SOURCE_CLEANUP_INCOMPLETE';
 
 export default function CameraView({ onClose }: CameraViewProps) {
   const [facing, setFacing] = useState<CameraType>('back');
@@ -23,9 +33,10 @@ export default function CameraView({ onClose }: CameraViewProps) {
   const savingRef = useRef(false);
   const mountedRef = useRef(true);
   const readyRef = useRef(false);
-  const [captureStatus, setCaptureStatus] = useState<
-    'failed' | 'cleanup' | null
-  >(null);
+  const [captureStatus, setCaptureStatus] = useState<CaptureStatus | null>(
+    null
+  );
+  const cameraReadyRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -40,7 +51,7 @@ export default function CameraView({ onClose }: CameraViewProps) {
         await PhotoVault.prepareCaptureVault();
         readyRef.current = true;
       } catch {
-        if (mountedRef.current) setCaptureStatus('failed');
+        if (mountedRef.current) setCaptureStatus('VAULT_PREPARATION_FAILED');
       }
     })();
   }, []);
@@ -58,40 +69,75 @@ export default function CameraView({ onClose }: CameraViewProps) {
   }, [onClose]);
 
   function toggleCameraFacing() {
+    cameraReadyRef.current = false;
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
   }
 
   async function takePicture() {
     if (savingRef.current || !readyRef.current || !cameraRef.current) {
-      if (!readyRef.current && mountedRef.current) setCaptureStatus('failed');
+      if (!readyRef.current && mountedRef.current)
+        setCaptureStatus((current) =>
+          current === 'VAULT_PREPARATION_FAILED'
+            ? current
+            : 'VAULT_PREPARATION_PENDING'
+        );
       return;
     }
     savingRef.current = true;
     setCaptureStatus(null);
+    let phase: 'camera' | 'save' = 'camera';
     try {
       const photo = await cameraRef.current.takePictureAsync();
       if (!photo) {
-        if (mountedRef.current) setCaptureStatus('failed');
+        if (mountedRef.current) setCaptureStatus('CAMERA_CAPTURE_EMPTY');
         return;
       }
+      phase = 'save';
       const result = await savePhoto(photo.uri);
       if (!result.sourceRemoved && mountedRef.current)
-        setCaptureStatus('cleanup');
-    } catch {
-      if (mountedRef.current) setCaptureStatus('failed');
+        setCaptureStatus('SOURCE_CLEANUP_INCOMPLETE');
+    } catch (error) {
+      if (mountedRef.current) {
+        const stages: PhotoSaveStage[] = [
+          'SAVE_URI_INVALID',
+          'SAVE_CACHE_UNAVAILABLE',
+          'SAVE_CACHE_LOOKUP_FAILED',
+          'SAVE_DIRECTORY_FAILED',
+          'SAVE_COPY_FAILED',
+          'SAVE_ENCRYPTION_FAILED',
+        ];
+        const stage =
+          error && typeof error === 'object' && 'stage' in error
+            ? (error as { stage?: unknown }).stage
+            : undefined;
+        setCaptureStatus(
+          phase === 'camera'
+            ? cameraReadyRef.current
+              ? 'CAMERA_CAPTURE_FAILED_READY'
+              : 'CAMERA_CAPTURE_FAILED_NOT_READY'
+            : (stages.find((code) => code === stage) ?? 'SAVE_FAILED')
+        );
+      }
     } finally {
       savingRef.current = false;
     }
   }
 
   return (
-    <ExpoCameraView ref={cameraRef} style={styles.camera} facing={facing}>
+    <ExpoCameraView
+      ref={cameraRef}
+      style={styles.camera}
+      facing={facing}
+      onCameraReady={() => {
+        cameraReadyRef.current = true;
+      }}
+    >
       <View style={styles.buttonContainer}>
         {captureStatus && (
           <Text style={styles.error}>
-            {captureStatus === 'cleanup'
+            {captureStatus === 'SOURCE_CLEANUP_INCOMPLETE'
               ? 'Photo saved, but cleanup was incomplete'
-              : 'Photo could not be saved'}
+              : `Photo could not be saved (${captureStatus})`}
           </Text>
         )}
         <TouchableOpacity

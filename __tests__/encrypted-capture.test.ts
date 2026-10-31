@@ -4,6 +4,7 @@ import { savePhoto } from '../app/utils/security';
 import PhotoVault from '../modules/photo-vault/src/PhotoVault';
 
 jest.mock('expo-file-system', () => ({
+  __esModule: true,
   documentDirectory: 'file:///private/files/',
   cacheDirectory: 'file:///private/cache/',
   getInfoAsync: jest.fn(),
@@ -90,4 +91,66 @@ test('committed ciphertext remains successful when original-source cleanup fails
   const result = await savePhoto('file:///private/camera/original.jpg');
   expect(result.uri).toContain('.scv');
   expect(result.sourceRemoved).toBe(false);
+});
+
+test('invalid input reports its fixed validation stage', async () => {
+  await expect(savePhoto('content://provider/photo')).rejects.toMatchObject({
+    stage: 'SAVE_URI_INVALID',
+  });
+  expect(copy).not.toHaveBeenCalled();
+});
+
+test('missing cache reports its fixed stage before any filesystem mutation', async () => {
+  const cache = jest.replaceProperty(FileSystem, 'cacheDirectory', null);
+  try {
+    await expect(
+      savePhoto('file:///private/camera/original.jpg')
+    ).rejects.toMatchObject({
+      stage: 'SAVE_CACHE_UNAVAILABLE',
+    });
+    expect(getInfo).not.toHaveBeenCalled();
+    expect(copy).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+  } finally {
+    cache.restore();
+  }
+});
+
+test.each(['lookup', 'directory', 'copy'] as const)(
+  'reports the %s stage and never deletes the original on failure',
+  async (stage) => {
+    const detail = new Error('file:///private/secret-detail.jpg');
+    if (stage === 'lookup') getInfo.mockRejectedValueOnce(detail);
+    if (stage === 'directory') {
+      getInfo.mockResolvedValueOnce({ exists: false } as FileSystem.FileInfo);
+      jest.mocked(FileSystem.makeDirectoryAsync).mockRejectedValueOnce(detail);
+    }
+    if (stage === 'copy') copy.mockRejectedValueOnce(detail);
+    const expected = {
+      lookup: 'SAVE_CACHE_LOOKUP_FAILED',
+      directory: 'SAVE_DIRECTORY_FAILED',
+      copy: 'SAVE_COPY_FAILED',
+    }[stage];
+    await expect(
+      savePhoto('file:///private/camera/original.jpg')
+    ).rejects.toMatchObject({ stage: expected });
+    expect(encrypt).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+  }
+);
+
+test('encryption stage survives failed staged-copy cleanup and preserves the original', async () => {
+  encrypt.mockRejectedValueOnce(new Error('native encryption failure'));
+  remove.mockRejectedValueOnce(new Error('staging cleanup failure'));
+  await expect(
+    savePhoto('file:///private/camera/original.jpg')
+  ).rejects.toMatchObject({
+    stage: 'SAVE_ENCRYPTION_FAILED',
+    message: 'native encryption failure',
+  });
+  expect(remove).toHaveBeenCalledTimes(1);
+  expect(remove).not.toHaveBeenCalledWith(
+    'file:///private/camera/original.jpg',
+    expect.anything()
+  );
 });

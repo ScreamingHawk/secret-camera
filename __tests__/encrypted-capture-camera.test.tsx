@@ -6,7 +6,6 @@ import { savePhoto } from '../app/utils/security';
 import PhotoVault from '../modules/photo-vault/src/PhotoVault';
 
 const mockCameraTakePicture = jest.fn();
-
 jest.mock('expo-camera', () => {
   const React = require('react');
   return {
@@ -41,6 +40,9 @@ const buttons = (tree: TestRenderer.ReactTestRenderer) =>
   tree.root.findAllByType(TouchableOpacity);
 const text = (tree: TestRenderer.ReactTestRenderer) =>
   tree.root.findAllByType(Text).map((node) => node.props.children);
+const cameraNode = (tree: TestRenderer.ReactTestRenderer) =>
+  tree.root.findByType('CameraMock' as any);
+const errorText = (code: string) => `Photo could not be saved (${code})`;
 const tap = async (button: TestRenderer.ReactTestInstance) => {
   await act(async () => {
     button.props.onPress();
@@ -67,16 +69,15 @@ test('switches camera facing from back to front and back', async () => {
   await act(async () => {
     tree = camera();
   });
-  const cameraNode = () => tree.root.findByType('CameraMock' as any);
-  expect(cameraNode().props.facing).toBe('back');
+  expect(cameraNode(tree).props.facing).toBe('back');
   await tap(buttons(tree)[0]);
-  expect(cameraNode().props.facing).toBe('front');
+  expect(cameraNode(tree).props.facing).toBe('front');
   await tap(buttons(tree)[0]);
-  expect(cameraNode().props.facing).toBe('back');
+  expect(cameraNode(tree).props.facing).toBe('back');
   tree.unmount();
 });
 
-test('blocks capture until vault preparation resolves and reports preparation failure safely', async () => {
+test('distinguishes pending vault preparation from failure and preserves failure on another press', async () => {
   const gate = deferred<void>();
   prepare.mockReturnValue(gate.promise);
   let tree!: TestRenderer.ReactTestRenderer;
@@ -85,22 +86,27 @@ test('blocks capture until vault preparation resolves and reports preparation fa
   });
   await tap(buttons(tree)[1]);
   expect(mockCameraTakePicture).not.toHaveBeenCalled();
-  expect(text(tree)).toContain('Photo could not be saved');
+  expect(text(tree)).toEqual([errorText('VAULT_PREPARATION_PENDING')]);
   await act(async () => {
     gate.resolve();
     await gate.promise;
   });
   await tap(buttons(tree)[1]);
   expect(mockCameraTakePicture).toHaveBeenCalledTimes(1);
+  expect(text(tree)).toEqual([]);
   tree.unmount();
 
-  prepare.mockRejectedValueOnce(new Error('secret native detail'));
+  prepare.mockRejectedValueOnce(
+    new Error('file:///private/secret native detail')
+  );
   await act(async () => {
     tree = camera();
   });
   await flush();
-  expect(text(tree)).toContain('Photo could not be saved');
-  expect(text(tree)).not.toContain('secret native detail');
+  expect(text(tree)).toEqual([errorText('VAULT_PREPARATION_FAILED')]);
+  await tap(buttons(tree)[1]);
+  expect(text(tree)).toEqual([errorText('VAULT_PREPARATION_FAILED')]);
+  expect(text(tree).join(' ')).not.toContain('file:///private/');
   tree.unmount();
 });
 
@@ -164,24 +170,94 @@ test('reports capture/save failures and retries; committed cleanup warning is no
     tree = camera();
   });
   await flush();
-  mockCameraTakePicture.mockRejectedValueOnce(new Error('camera detail'));
+  mockCameraTakePicture.mockRejectedValueOnce(
+    new Error('file:///private/camera detail')
+  );
   await tap(buttons(tree)[1]);
-  expect(text(tree)).toContain('Photo could not be saved');
-  mockCameraTakePicture.mockResolvedValueOnce({
-    uri: 'file:///camera/retry.jpg',
-  });
-  save.mockRejectedValueOnce(new Error('save detail'));
+  expect(text(tree)).toEqual([errorText('CAMERA_CAPTURE_FAILED_NOT_READY')]);
+  save.mockRejectedValueOnce(new Error('file:///private/save detail'));
   await tap(buttons(tree)[1]);
-  expect(text(tree)).toContain('Photo could not be saved');
+  expect(text(tree)).toEqual([errorText('SAVE_FAILED')]);
   await tap(buttons(tree)[1]);
   expect(save).toHaveBeenCalledTimes(2);
-  expect(text(tree)).not.toContain('Photo could not be saved');
+  expect(text(tree)).toEqual([]);
   save.mockResolvedValueOnce({
     uri: 'file:///gallery/committed.scv',
     sourceRemoved: false,
   });
   await tap(buttons(tree)[1]);
-  expect(text(tree)).toContain('Photo saved, but cleanup was incomplete');
-  expect(text(tree)).not.toContain('Photo could not be saved');
+  expect(text(tree)).toEqual(['Photo saved, but cleanup was incomplete']);
+  tree.unmount();
+});
+
+test('observes camera readiness in the failure code and resets it on facing changes without gating capture', async () => {
+  let tree!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    tree = camera();
+  });
+  expect(text(tree)).toEqual([]);
+  await act(async () => {
+    cameraNode(tree).props.onCameraReady();
+  });
+  expect(text(tree)).toEqual([]);
+  mockCameraTakePicture.mockRejectedValueOnce(
+    new Error('private camera detail')
+  );
+  await tap(buttons(tree)[1]);
+  expect(text(tree)).toEqual([errorText('CAMERA_CAPTURE_FAILED_READY')]);
+  await tap(buttons(tree)[0]);
+  mockCameraTakePicture.mockRejectedValueOnce(
+    new Error('private camera detail')
+  );
+  await tap(buttons(tree)[1]);
+  expect(text(tree)).toEqual([errorText('CAMERA_CAPTURE_FAILED_NOT_READY')]);
+  expect(mockCameraTakePicture).toHaveBeenCalledTimes(2);
+  tree.unmount();
+});
+
+test('reports an empty camera result without invoking save', async () => {
+  let tree!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    tree = camera();
+  });
+  mockCameraTakePicture.mockResolvedValueOnce(undefined);
+  await tap(buttons(tree)[1]);
+  expect(text(tree)).toEqual([errorText('CAMERA_CAPTURE_EMPTY')]);
+  expect(save).not.toHaveBeenCalled();
+  tree.unmount();
+});
+
+test.each([
+  'SAVE_URI_INVALID',
+  'SAVE_CACHE_UNAVAILABLE',
+  'SAVE_CACHE_LOOKUP_FAILED',
+  'SAVE_DIRECTORY_FAILED',
+  'SAVE_COPY_FAILED',
+  'SAVE_ENCRYPTION_FAILED',
+])('renders only the whitelisted save-stage code %s', async (stage) => {
+  let tree!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    tree = camera();
+  });
+  save.mockRejectedValueOnce(
+    Object.assign(new Error('file:///private/secret.jpg'), { stage })
+  );
+  await tap(buttons(tree)[1]);
+  expect(text(tree)).toEqual([errorText(stage)]);
+  expect(text(tree).join(' ')).not.toContain('file:///private/');
+  tree.unmount();
+});
+
+test('never renders an arbitrary error stage or message', async () => {
+  let tree!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    tree = camera();
+  });
+  save.mockRejectedValueOnce({
+    stage: 'file:///private/secret.jpg',
+    message: 'PRIVATE_IMAGE_SENTINEL',
+  });
+  await tap(buttons(tree)[1]);
+  expect(text(tree)).toEqual([errorText('SAVE_FAILED')]);
   tree.unmount();
 });
