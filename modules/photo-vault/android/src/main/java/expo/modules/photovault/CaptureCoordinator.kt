@@ -52,9 +52,16 @@ internal class CaptureCoordinator(
     require(source.isAbsolute && source.parentFile?.canonicalFile == cacheDir.canonicalFile && source.isFile) {
       "Capture must be directly inside private camera cache"
     }
+    val sourceStat = Os.lstat(source.path)
+    require((sourceStat.st_mode and OsConstants.S_IFMT) == OsConstants.S_IFREG) {
+      "Capture source must be a regular file"
+    }
     val filename = "photo-${UUID.randomUUID()}.scv"
-    val encrypted = File(galleryDir, filename)
-    codecFactory(cacheDir, galleryDir).encrypt(source.path, encrypted.path)
+    val encrypted = File(galleryDir.canonicalFile, filename)
+    // Normalize only trusted context roots, not the source leaf: codec validation
+    // and O_NOFOLLOW must still reject a leaf replaced with a symlink.
+    val canonicalSource = File(cacheDir.canonicalFile, source.name)
+    codecFactory(cacheDir, galleryDir).encrypt(canonicalSource.path, encrypted.path)
     try {
       val view = codecFactory(galleryDir, viewDir).prepareView(filename)
       try { check(view.isFile) { "Encrypted photo validation failed" } } finally { view.delete() }

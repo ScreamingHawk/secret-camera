@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 import TestRenderer, { act } from 'react-test-renderer';
 import CameraView from '../app/components/CameraView';
 import { savePhoto } from '../app/utils/security';
@@ -42,7 +42,22 @@ const text = (tree: TestRenderer.ReactTestRenderer) =>
   tree.root.findAllByType(Text).map((node) => node.props.children);
 const cameraNode = (tree: TestRenderer.ReactTestRenderer) =>
   tree.root.findByType('CameraMock' as any);
-const errorText = (code: string) => `Photo could not be saved (${code})`;
+const displayCode: Record<string, string> = {
+  VAULT_PREPARATION_PENDING: 'V1_WAIT',
+  VAULT_PREPARATION_FAILED: 'V2_VAULT',
+  CAMERA_CAPTURE_FAILED_NOT_READY: 'C3_CAMERA',
+  CAMERA_CAPTURE_FAILED_READY: 'C2_READY',
+  CAMERA_CAPTURE_EMPTY: 'C1_EMPTY',
+  SAVE_FAILED: 'S0_SAVE',
+  SAVE_URI_INVALID: 'S1_URI',
+  SAVE_CACHE_UNAVAILABLE: 'S2_CACHE',
+  SAVE_CACHE_LOOKUP_FAILED: 'S3_LOOKUP',
+  SAVE_DIRECTORY_FAILED: 'S4_DIR',
+  SAVE_COPY_FAILED: 'S5_COPY',
+  SAVE_ENCRYPTION_FAILED: 'S6_ENCRYPT',
+};
+const errorText = (code: string) =>
+  `Photo could not be saved\n${displayCode[code]}`;
 const tap = async (button: TestRenderer.ReactTestInstance) => {
   await act(async () => {
     button.props.onPress();
@@ -245,6 +260,25 @@ test.each([
   await tap(buttons(tree)[1]);
   expect(text(tree)).toEqual([errorText(stage)]);
   expect(text(tree).join(' ')).not.toContain('file:///private/');
+  tree.unmount();
+});
+
+test('bounds the diagnostic label and puts a short code on its own line', async () => {
+  let tree!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    tree = camera();
+  });
+  save.mockRejectedValueOnce({ stage: 'SAVE_ENCRYPTION_FAILED' });
+  await tap(buttons(tree)[1]);
+  const label = tree.root.findByType(Text);
+  expect(label.props.children).toBe('Photo could not be saved\nS6_ENCRYPT');
+  expect(StyleSheet.flatten(label.props.style)).toMatchObject({
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+  });
+  for (const code of Object.values(displayCode))
+    expect(code.length).toBeLessThanOrEqual(10);
   tree.unmount();
 });
 

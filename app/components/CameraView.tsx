@@ -27,6 +27,22 @@ type CaptureStatus =
   | 'SAVE_FAILED'
   | 'SOURCE_CLEANUP_INCOMPLETE';
 
+const DISPLAY_CODES: Record<CaptureStatus, string> = {
+  SAVE_URI_INVALID: 'S1_URI',
+  SAVE_CACHE_UNAVAILABLE: 'S2_CACHE',
+  SAVE_CACHE_LOOKUP_FAILED: 'S3_LOOKUP',
+  SAVE_DIRECTORY_FAILED: 'S4_DIR',
+  SAVE_COPY_FAILED: 'S5_COPY',
+  SAVE_ENCRYPTION_FAILED: 'S6_ENCRYPT',
+  VAULT_PREPARATION_PENDING: 'V1_WAIT',
+  VAULT_PREPARATION_FAILED: 'V2_VAULT',
+  CAMERA_CAPTURE_EMPTY: 'C1_EMPTY',
+  CAMERA_CAPTURE_FAILED_READY: 'C2_READY',
+  CAMERA_CAPTURE_FAILED_NOT_READY: 'C3_CAMERA',
+  SAVE_FAILED: 'S0_SAVE',
+  SOURCE_CLEANUP_INCOMPLETE: 'S7_CLEANUP',
+};
+
 export default function CameraView({ onClose }: CameraViewProps) {
   const [facing, setFacing] = useState<CameraType>('back');
   const cameraRef = useRef<ExpoCameraView>(null);
@@ -137,7 +153,7 @@ export default function CameraView({ onClose }: CameraViewProps) {
           <Text style={styles.error}>
             {captureStatus === 'SOURCE_CLEANUP_INCOMPLETE'
               ? 'Photo saved, but cleanup was incomplete'
-              : `Photo could not be saved (${captureStatus})`}
+              : `Photo could not be saved\n${DISPLAY_CODES[captureStatus]}`}
           </Text>
         )}
         <TouchableOpacity
@@ -186,10 +202,12 @@ const styles = StyleSheet.create({
   error: {
     position: 'absolute',
     bottom: 90,
-    alignSelf: 'center',
+    left: 0,
+    right: 0,
     color: 'white',
     backgroundColor: '#900',
     padding: 8,
+    textAlign: 'center',
   },
   captureButtonInner: {
     width: 60,
