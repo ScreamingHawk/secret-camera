@@ -8,6 +8,41 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CaptureCoordinatorInstrumentedTest {
+  @Test fun captureAcceptsTrustedCacheRootAliasButRejectsLeafSymlink() {
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val root = File(context.cacheDir, "root-alias-${UUID.randomUUID()}").apply { mkdir() }
+    val alias = "secret-camera.root-alias.${UUID.randomUUID()}"
+    try {
+      val actualCamera = File(root, "camera").apply { mkdir() }
+      val aliasCamera = File(root, "camera-alias")
+      android.system.Os.symlink(actualCamera.path, aliasCamera.path)
+      val actualGallery = File(root, "gallery").apply { mkdir() }
+      val gallery = File(root, "gallery-alias")
+      android.system.Os.symlink(actualGallery.path, gallery.path)
+      val views = File(root, "views")
+      val keys = VaultKeyStore(alias)
+      val coordinator = CaptureCoordinator(root, aliasCamera, gallery, views, keys, File(root, "initialized"))
+      val original = byteArrayOf(1, 3, 5, 7)
+      repeat(2) { attempt ->
+        val source = File(aliasCamera, "trusted-$attempt.jpg").apply { writeBytes(original) }
+        val saved = coordinator.save(source)
+        assertFalse(source.exists())
+        val reopened = EncryptedPhotoCodec(actualGallery, keys, trustedOutputDir = views).prepareView(saved.filename)
+        try { assertArrayEquals(original, reopened.readBytes()) } finally { reopened.delete() }
+      }
+      assertEquals(2, actualGallery.listFiles()!!.count { it.name.endsWith(".scv") })
+      val target = File(actualCamera, "target.jpg").apply { writeBytes(byteArrayOf(9, 8, 7)) }
+      val malicious = File(actualCamera, "leaf.jpg")
+      android.system.Os.symlink(target.path, malicious.path)
+      assertThrows(IllegalArgumentException::class.java) { coordinator.save(malicious) }
+      assertTrue(malicious.exists())
+      assertArrayEquals(byteArrayOf(9, 8, 7), target.readBytes())
+    } finally {
+      KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry(alias) }
+      root.deleteRecursively()
+    }
+  }
+
   @Test fun freshCapturePreparesVaultEncryptsValidatesAndRemovesSource() {
     val context = InstrumentationRegistry.getInstrumentation().targetContext
     val root = File(context.cacheDir, "coordinator-${UUID.randomUUID()}").apply { mkdir() }
