@@ -214,6 +214,10 @@ export default function GalleryView({
           />
         )}
         keyExtractor={(item) => item}
+        initialNumToRender={12}
+        maxToRenderPerBatch={6}
+        windowSize={5}
+        removeClippedSubviews
       />
     </View>
   );

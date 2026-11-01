@@ -29,12 +29,12 @@ jest.mock('react-native', () => ({
     }),
   },
   Dimensions: { get: () => ({ width: 400 }) },
-  FlatList: ({ data, renderItem }: any) =>
+  FlatList: ({ data, renderItem, ...listProps }: any) =>
     jest
       .requireActual('react')
       .createElement(
         'View',
-        null,
+        { testID: 'gallery-list', ...listProps },
         ...data.map((item: string, index: number) =>
           renderItem({ item, index })
         )
@@ -86,6 +86,18 @@ beforeEach(() => {
 });
 
 describe('Gallery legacy migration action', () => {
+  it('bounds encrypted view preparation to the visible FlatList window', async () => {
+    const tree = await mount();
+    const list = tree.root.findByProps({ testID: 'gallery-list' });
+    expect(list.props.initialNumToRender).toBe(12);
+    expect(list.props.maxToRenderPerBatch).toBe(6);
+    expect(list.props.windowSize).toBe(5);
+    expect(list.props.removeClippedSubviews).toBe(true);
+    await act(async () => {
+      tree.unmount();
+    });
+  });
+
   it('keeps tiles blocked while native migration is pending; back consumes without closing', async () => {
     const pending = deferred<any>();
     migrate.mockReturnValue(pending.promise);
