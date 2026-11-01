@@ -10,7 +10,7 @@ Implementation is authorized for the publishing chain: `sc-21g` (deterministic v
 
 Prioritise short implementation-to-phone-feedback cycles, not complete coverage. For small UI-only changes, use relevant existing regression tests, typecheck and the ordinary build/bundle check. Do not add a benchmark framework, exhaustive device matrix or repeated native-security runs for unchanged native paths. Deeper checks belong to changes affecting encryption, authentication, conversion or deletion. Preserve signing, upgrades and photo data; never claim a speedup from mocked tests. A representative phone check can supply performance acceptance. Existing CI remains enabled.
 
-Read the exact current ticket for execution authority: the kickoff assignments above are historical, not the current completion state. The gallery performance task sc-5xx is authorised; Settings and other backlog work require their own approval. Signed releases remain separately authorised.
+Read the exact current ticket for execution authority: the kickoff assignments above are historical, not the current completion state. The gallery change is released as v1.1.7 with speed improvement unmeasured and phone feedback outstanding. The user authorised sc-s5q (Settings, automatic encryption toggle and bulk encrypt/decrypt) next; only that bounded task is authorised now. Other backlog work and another signed release need their own approval.
 
 ## Approved scope and release direction
 
@@ -20,6 +20,6 @@ Read the exact current ticket for execution authority: the kickoff assignments a
 - Routine Google Play publication can be automated, but review/policy/rejection states can require manual intervention. The user's hard condition is no manual steps between deployments; do not substitute Play without explicit approval of those exceptions.
 - A one-time signing/repository setup is distinct from recurring deployments. After that setup and a valid release tag, the build, signing, GitHub Release and F-Droid/Pages publication must run without manual approvals or console/upload/indexing steps. Real failures must fail visibly, not be represented as deployed.
 - Preserve `link.standen.secretcamera`, compatible signing identity and existing photos. Do not uninstall or delete user photos as an upgrade workaround.
-- Encrypt stored photos; normal viewing and sharing must decrypt automatically after authentication. Sharing exports a conventional image, not an encrypted container or a new manual-decrypt workflow.
+- Under sc-s5q, encrypt new camera saves only when the persisted "Encrypt automatically" setting is enabled (default on). Disabled captures and explicit bulk decryption remain app-private but unencrypted at rest. Bulk actions do not change the toggle. Viewing/sharing must transparently support both formats after authentication; sharing exports a conventional image.
 - Remove unused barcode-scanning dependencies from release artifacts; inspect resolved dependencies rather than assuming a config flag proves removal.
 - Preserve the approved Git identity/signing configuration. Never commit secrets, application signing material, private photos or local tracker databases.
