@@ -6,6 +6,12 @@ Use Beads (`bd`) for implementation tasks. Run `bd prime` and read the exact iss
 
 Implementation is authorized for the publishing chain: `sc-21g` (deterministic versioning) -> `sc-5rc` (tag-triggered signed APK releases) -> `sc-k8v` (personal F-Droid repository plus docs CI). Separately, encryption epic `sc-5ht` is split into seven children; only `sc-5ht.1` (Android Keystore key lifecycle) is authorized now. Its worker owns only `modules/photo-vault/` and must stop after that one slice, without automatically starting later children. Publishing and encryption use separate worktrees; root package/config/version/workflow integration stays publishing-owned until the orchestrator reconciles it. Relock, barcode cleanup and all later encryption children remain unstarted backlog. The orchestrator owns tracker transitions, review, commits and publication. Verification belongs in each implementation ticket rather than a separate proof-only ticket. Do not seed the earlier broad revival plan as additional tasks without approval. Missing signing keys or historical version evidence are real release blockers, not permission to invent a baseline or replace the signer.
 
+## Development verification policy
+
+Prioritise short implementation-to-phone-feedback cycles, not complete coverage. For small UI-only changes, use relevant existing regression tests, typecheck and the ordinary build/bundle check. Do not add a benchmark framework, exhaustive device matrix or repeated native-security runs for unchanged native paths. Deeper checks belong to changes affecting encryption, authentication, conversion or deletion. Preserve signing, upgrades and photo data; never claim a speedup from mocked tests. A representative phone check can supply performance acceptance. Existing CI remains enabled.
+
+Read the exact current ticket for execution authority: the kickoff assignments above are historical, not the current completion state. The gallery performance task sc-5xx is authorised; Settings and other backlog work require their own approval. Signed releases remain separately authorised.
+
 ## Approved scope and release direction
 
 - Android only; no iOS work.
