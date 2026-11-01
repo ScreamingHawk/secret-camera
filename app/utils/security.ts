@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system';
 import * as LocalAuthentication from 'expo-local-authentication';
 import PhotoVault from '../../modules/photo-vault/src/PhotoVault';
 import { APP_DIRECTORY } from '../constants';
+import { runPhotoOperation } from './photoOperation';
 
 export type PhotoSaveStage =
   | 'SAVE_URI_INVALID'
@@ -41,9 +42,18 @@ export async function authenticateUser(): Promise<boolean> {
   return result.success;
 }
 
-export async function savePhoto(
+export function savePhoto(
   sourceUri: string,
-  _filename?: string
+  encryptAutomatically = true
+): Promise<{ uri: string; sourceRemoved: boolean }> {
+  return runPhotoOperation(() =>
+    savePhotoOwned(sourceUri, encryptAutomatically)
+  );
+}
+
+async function savePhotoOwned(
+  sourceUri: string,
+  encryptAutomatically: boolean
 ): Promise<{ uri: string; sourceRemoved: boolean }> {
   if (!sourceUri.startsWith('file://'))
     throw new PhotoSaveError(
@@ -57,48 +67,97 @@ export async function savePhoto(
       new Error('Private capture cache unavailable')
     );
   const captureDir = `${cacheDir}.secret-camera/`;
-  let info;
+  let cacheInfo;
   try {
-    info = await FileSystem.getInfoAsync(captureDir);
+    cacheInfo = await FileSystem.getInfoAsync(captureDir);
   } catch (error) {
     throw new PhotoSaveError('SAVE_CACHE_LOOKUP_FAILED', error);
   }
-  if (!info.exists)
+  if (!cacheInfo.exists) {
     try {
       await FileSystem.makeDirectoryAsync(captureDir, { intermediates: true });
     } catch (error) {
       throw new PhotoSaveError('SAVE_DIRECTORY_FAILED', error);
     }
-  const source = `${captureDir}capture-${Date.now()}-${Math.random().toString(16).slice(2)}.jpg`;
+  }
+  const nonce = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const staged = `${captureDir}capture-${nonce}.jpg`;
   try {
-    await FileSystem.copyAsync({ from: sourceUri, to: source });
+    await FileSystem.copyAsync({ from: sourceUri, to: staged });
   } catch (error) {
     throw new PhotoSaveError('SAVE_COPY_FAILED', error);
   }
-  let result: { filename: string; sourceRemoved: boolean };
-  try {
-    result = await PhotoVault.encryptCapturedPhoto(
-      source.replace('file://', '')
-    );
-  } catch (error) {
+
+  if (encryptAutomatically) {
     try {
-      await FileSystem.deleteAsync(source, { idempotent: true });
-    } catch {
-      /* preserve encryption failure */
+      const result = await PhotoVault.encryptCapturedPhoto(
+        staged.replace('file://', '')
+      );
+      let originalRemoved = false;
+      try {
+        await FileSystem.deleteAsync(sourceUri, { idempotent: true });
+        originalRemoved = true;
+      } catch {
+        /* Keep capture result; report incomplete cleanup. */
+      }
+      return {
+        uri: `${APP_DIRECTORY.SECRET_CAMERA}/${result.filename}`,
+        sourceRemoved: result.sourceRemoved && originalRemoved,
+      };
+    } catch (error) {
+      // Retain the staged private copy and original on encryption failure for recovery/retry.
+      throw new PhotoSaveError('SAVE_ENCRYPTION_FAILED', error);
     }
-    throw new PhotoSaveError('SAVE_ENCRYPTION_FAILED', error);
   }
-  let originalRemoved = false;
+
+  const gallery = APP_DIRECTORY.SECRET_CAMERA;
+  const galleryInfo = await FileSystem.getInfoAsync(gallery).catch((error) => {
+    throw new PhotoSaveError('SAVE_DIRECTORY_FAILED', error);
+  });
+  if (!galleryInfo.exists) {
+    try {
+      await FileSystem.makeDirectoryAsync(gallery, { intermediates: true });
+    } catch (error) {
+      throw new PhotoSaveError('SAVE_DIRECTORY_FAILED', error);
+    }
+  }
+  const filename = `photo-${nonce}.jpg`;
+  const destination = `${gallery}/${filename}`;
+  let destinationCreated = false;
   try {
-    await FileSystem.deleteAsync(sourceUri, { idempotent: true });
-    originalRemoved = true;
-  } catch {
-    // Encryption is committed; retain the source and report cleanup separately.
+    const existing = await FileSystem.getInfoAsync(destination);
+    if (existing.exists)
+      throw new Error('Refusing to overwrite existing photo');
+    destinationCreated = true;
+    await FileSystem.copyAsync({ from: staged, to: destination });
+    const [sourceInfo, destinationInfo] = await Promise.all([
+      FileSystem.getInfoAsync(staged),
+      FileSystem.getInfoAsync(destination),
+    ]);
+    if (
+      !sourceInfo.exists ||
+      !destinationInfo.exists ||
+      !destinationInfo.size ||
+      destinationInfo.size !== sourceInfo.size
+    ) {
+      throw new Error('Plaintext photo copy verification failed');
+    }
+  } catch (error) {
+    if (destinationCreated)
+      await FileSystem.deleteAsync(destination, { idempotent: true }).catch(
+        () => undefined
+      );
+    throw new PhotoSaveError('SAVE_COPY_FAILED', error);
   }
-  return {
-    uri: `${APP_DIRECTORY.SECRET_CAMERA}/${result.filename}`,
-    sourceRemoved: result.sourceRemoved && originalRemoved,
-  };
+  let sourceRemoved = false;
+  try {
+    await FileSystem.deleteAsync(staged, { idempotent: true });
+    await FileSystem.deleteAsync(sourceUri, { idempotent: true });
+    sourceRemoved = true;
+  } catch {
+    /* The verified gallery copy is committed; leave recoverable source files. */
+  }
+  return { uri: destination, sourceRemoved };
 }
 
 export async function getPhotoUri(uri: string): Promise<string> {

@@ -7,17 +7,13 @@ import {
   FlatList,
   Image,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import PhotoVault from '../../modules/photo-vault/src/PhotoVault';
 import { APP_DIRECTORY } from '../constants';
 import { usePhotoView } from '../utils/encryptedPhotoView';
-import {
-  getPendingMigration,
-  runLegacyMigration,
-} from '../utils/photoMigration';
+import { isPhotoOperationRunning } from '../utils/photoOperation';
 import ImageView from './ImageView';
 
 interface GalleryViewProps {
@@ -31,12 +27,6 @@ export default function GalleryView({
 }: GalleryViewProps) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
-  const [migration, setMigration] = useState<
-    'idle' | 'running' | 'success' | 'partial' | 'error'
-  >('idle');
-  const [migrationMessage, setMigrationMessage] = useState('');
-  const migrationLock = useRef(false);
-  const migrationRunning = useRef(false);
   const mounted = useRef(true);
 
   useEffect(
@@ -46,44 +36,9 @@ export default function GalleryView({
     []
   );
 
-  async function handleMigration() {
-    if (migrationLock.current) return;
-    migrationLock.current = true;
-    migrationRunning.current = true;
-    setMigration('running');
-    setMigrationMessage(
-      'Encrypting existing photos. Originals are replaced only after verification.'
-    );
-    try {
-      const result = await runLegacyMigration();
-      if (!mounted.current) return;
-      await loadPhotos();
-      if (!mounted.current) return;
-      setMigration(result.failed ? 'partial' : 'success');
-      setMigrationMessage(
-        result.failed
-          ? `Encrypted ${result.migrated}; ${result.remaining} remain. Original files are retained when verification fails.`
-          : result.migrated
-            ? `Encrypted ${result.migrated} photos.`
-            : 'No legacy photos found.'
-      );
-    } catch {
-      if (mounted.current) {
-        setMigration('error');
-        setMigrationMessage(
-          'Could not encrypt photos. Originals have been retained; check vault availability and retry.'
-        );
-      }
-    } finally {
-      migrationLock.current = false;
-      migrationRunning.current = false;
-    }
-  }
-
   useEffect(() => {
     mounted.current = true;
-    if (getPendingMigration()) void handleMigration();
-    else void loadPhotos();
+    void loadPhotos();
     return () => {
       mounted.current = false;
     };
@@ -93,7 +48,7 @@ export default function GalleryView({
     const backHandler = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
-        if (migrationRunning.current) return true;
+        if (isPhotoOperationRunning()) return true;
         if (selectedPhoto) {
           setSelectedPhoto(null);
         } else {
@@ -123,7 +78,7 @@ export default function GalleryView({
   async function handleDeleteImage(uri: string) {
     try {
       // Delete the file
-      if (migrationRunning.current) return;
+      if (isPhotoOperationRunning()) return;
       await PhotoVault.deleteGalleryPhoto(uri.split('/').pop()!);
 
       // Update the photos state
@@ -180,27 +135,10 @@ export default function GalleryView({
       <TouchableOpacity
         style={styles.closeButton}
         onPress={onClose}
-        disabled={migration === 'running'}
+        disabled={isPhotoOperationRunning()}
       >
         <Ionicons name="close" size={32} color="black" />
       </TouchableOpacity>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="Encrypt existing photos"
-        onPress={handleMigration}
-        disabled={migration === 'running'}
-        style={styles.migrateButton}
-      >
-        <Text>
-          {migration === 'running' ? 'Encrypting…' : 'Encrypt existing photos'}
-        </Text>
-      </TouchableOpacity>
-      {!!migrationMessage && (
-        <Text accessibilityLiveRegion="polite" style={styles.migrationMessage}>
-          {migrationMessage}
-        </Text>
-      )}
-
       <FlatList
         data={photos}
         numColumns={numColumns}
@@ -209,7 +147,7 @@ export default function GalleryView({
             item={item}
             imageSize={imageSize}
             onSelect={(uri) => {
-              if (!migrationRunning.current) setSelectedPhoto(uri);
+              if (!isPhotoOperationRunning()) setSelectedPhoto(uri);
             }}
           />
         )}
@@ -270,17 +208,6 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 15,
     alignSelf: 'flex-end',
-  },
-  migrateButton: {
-    padding: 12,
-    alignSelf: 'center',
-    backgroundColor: '#eee',
-    borderRadius: 8,
-  },
-  migrationMessage: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    textAlign: 'center',
   },
   imageContainer: {
     padding: 2,

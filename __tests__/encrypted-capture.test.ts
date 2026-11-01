@@ -1,5 +1,9 @@
 import * as FileSystem from 'expo-file-system';
 import { APP_DIRECTORY } from '../app/constants';
+import {
+  loadEncryptAutomatically,
+  saveEncryptAutomatically,
+} from '../app/utils/photoSettings';
 import { savePhoto } from '../app/utils/security';
 import PhotoVault from '../modules/photo-vault/src/PhotoVault';
 
@@ -11,6 +15,8 @@ jest.mock('expo-file-system', () => ({
   makeDirectoryAsync: jest.fn(),
   copyAsync: jest.fn(),
   deleteAsync: jest.fn(),
+  readAsStringAsync: jest.fn(),
+  writeAsStringAsync: jest.fn(),
 }));
 jest.mock('expo-local-authentication', () => ({}));
 jest.mock('../modules/photo-vault/src/PhotoVault', () => ({
@@ -25,7 +31,7 @@ const encrypt = jest.mocked(PhotoVault.encryptCapturedPhoto);
 
 beforeEach(() => {
   jest.clearAllMocks();
-  getInfo.mockResolvedValue({ exists: true } as FileSystem.FileInfo);
+  getInfo.mockResolvedValue({ exists: true, size: 100 } as FileSystem.FileInfo);
   copy.mockResolvedValue(undefined);
   remove.mockResolvedValue(undefined);
   encrypt.mockResolvedValue({
@@ -59,6 +65,43 @@ test('saves camera URI only through native encrypted capture and returns encrypt
   );
 });
 
+test('disabled capture is persisted and saved as a verified app-private plaintext photo', async () => {
+  await saveEncryptAutomatically(false);
+  jest.mocked(FileSystem.writeAsStringAsync).mockResolvedValue(undefined);
+  expect(FileSystem.writeAsStringAsync).toHaveBeenCalledWith(
+    expect.stringMatching(/\.secret-camera-settings\.json$/),
+    JSON.stringify({ encryptAutomatically: false })
+  );
+  jest
+    .mocked(FileSystem.readAsStringAsync)
+    .mockResolvedValue('{"encryptAutomatically":false}');
+  expect(await loadEncryptAutomatically()).toBe(false);
+
+  let photoLookup = 0;
+  getInfo.mockImplementation(
+    async (uri) =>
+      ({
+        exists: uri.includes('/.secret-camera/photo-')
+          ? ++photoLookup > 1
+          : true,
+        size: 100,
+      }) as FileSystem.FileInfo
+  );
+  const saved = await savePhoto('file:///private/camera/original.jpg', false);
+  expect(encrypt).not.toHaveBeenCalled();
+  expect(saved.uri).toContain('/.secret-camera/photo-');
+  expect(saved.uri.endsWith('.jpg')).toBe(true);
+  expect(copy).toHaveBeenCalledTimes(2);
+  expect(remove).toHaveBeenCalledWith(
+    expect.stringContaining('.secret-camera/capture-'),
+    { idempotent: true }
+  );
+  expect(remove).toHaveBeenCalledWith('file:///private/camera/original.jpg', {
+    idempotent: true,
+  });
+  expect(saved.sourceRemoved).toBe(true);
+});
+
 test('encryption failure rejects and never copies camera source to gallery', async () => {
   encrypt.mockRejectedValue(new Error('native failure'));
   await expect(
@@ -68,10 +111,7 @@ test('encryption failure rejects and never copies camera source to gallery', asy
   expect(copy.mock.calls[0][0]).not.toMatchObject({
     to: expect.stringContaining('/files/.secret-camera/'),
   });
-  expect(remove).toHaveBeenCalledWith(
-    expect.stringContaining('.secret-camera/capture-'),
-    { idempotent: true }
-  );
+  expect(remove).not.toHaveBeenCalled();
 });
 
 test('rejects non-file camera URI without staging plaintext', async () => {
@@ -148,9 +188,5 @@ test('encryption stage survives failed staged-copy cleanup and preserves the ori
     stage: 'SAVE_ENCRYPTION_FAILED',
     message: 'native encryption failure',
   });
-  expect(remove).toHaveBeenCalledTimes(1);
-  expect(remove).not.toHaveBeenCalledWith(
-    'file:///private/camera/original.jpg',
-    expect.anything()
-  );
+  expect(remove).not.toHaveBeenCalled();
 });

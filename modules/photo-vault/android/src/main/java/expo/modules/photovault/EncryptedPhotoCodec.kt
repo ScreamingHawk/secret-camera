@@ -83,6 +83,35 @@ internal class EncryptedPhotoCodec(
     destination
   }
 
+  /** Persist one authenticated gallery ciphertext as a plaintext gallery JPEG, then remove its source. */
+  internal fun decryptGalleryFile(sourceLeaf: String, beforeSourceRemoval: () -> Unit = {}): String = withPinnedRoots { root, outputRoot ->
+    require(root == outputRoot) { "Conversion source and destination must share the gallery root" }
+    require(sourceLeaf.endsWith(".scv", ignoreCase = true) && File(sourceLeaf).name == sourceLeaf && sourceLeaf != "." && sourceLeaf != "..") { "Expected encrypted photo leaf name" }
+    val destination = "decrypted-${java.security.MessageDigest.getInstance("SHA-256").digest(sourceLeaf.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }}.jpg"
+    val source = validateLeaf(root, sourceLeaf, true)
+    val sourceStat = Os.lstat(source.path)
+    require((sourceStat.st_mode and OsConstants.S_IFMT) == OsConstants.S_IFREG) { "Source must be a regular file" }
+    val envelope = readBounded(source, MAX_ENVELOPE_BYTES)
+    val plaintext = decryptAuthenticated(envelope)
+    val existing = File(root, destination)
+    if (!existing.exists()) {
+      try { publishExclusive(root, destination, plaintext) }
+      catch (failure: Exception) { if (!File(root, destination).exists()) throw failure }
+    }
+    val published = readBounded(validateLeaf(root, destination, true), MAX_PLAINTEXT_BYTES)
+    require(published.contentEquals(plaintext)) { "Existing decryption destination does not match source" }
+    val destinationFd = Os.open(existing.path, OsConstants.O_RDONLY or OsConstants.O_CLOEXEC or OsConstants.O_NOFOLLOW, 0)
+    try { Os.fsync(destinationFd) } finally { Os.close(destinationFd) }
+    ParcelFileDescriptor.fromFd(root.name.toInt()).use { Os.fsync(it.fileDescriptor) }
+    beforeSourceRemoval()
+    val currentStat = Os.lstat(source.path)
+    require(currentStat.st_dev == sourceStat.st_dev && currentStat.st_ino == sourceStat.st_ino) { "Source changed during conversion" }
+    require(readBounded(source, MAX_ENVELOPE_BYTES).contentEquals(envelope)) { "Source changed during conversion" }
+    Os.remove(source.path)
+    ParcelFileDescriptor.fromFd(root.name.toInt()).use { Os.fsync(it.fileDescriptor) }
+    destination
+  }
+
   fun prepareView(encryptedLeaf: String): File {
     return prepareAuthenticated(encryptedLeaf, "view-${UUID.randomUUID()}.jpg")
   }

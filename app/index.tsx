@@ -13,6 +13,12 @@ import {
 import AboutView from './components/AboutView';
 import CameraView from './components/CameraView';
 import GalleryView from './components/GalleryView';
+import SettingsView from './components/SettingsView';
+import { isPhotoOperationRunning } from './utils/photoOperation';
+import {
+  loadEncryptAutomatically,
+  saveEncryptAutomatically,
+} from './utils/photoSettings';
 import { authenticateUser } from './utils/security';
 
 export default function Index() {
@@ -20,6 +26,9 @@ export default function Index() {
   const [showCamera, setShowCamera] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [encryptAutomatically, setEncryptAutomatically] = useState(true);
+  const [settingsReady, setSettingsReady] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const authInFlight = useRef(false);
   const mounted = useRef(true);
@@ -63,6 +72,12 @@ export default function Index() {
   useEffect(() => {
     mounted.current = true;
     void authenticate();
+    void loadEncryptAutomatically().then((enabled) => {
+      if (mounted.current) {
+        setEncryptAutomatically(enabled);
+        setSettingsReady(true);
+      }
+    });
     const subscription = AppState.addEventListener('change', (state) => {
       const wasActive = appActive.current;
       // Ignore the biometric sheet's inactive→active transition. Android may
@@ -93,6 +108,7 @@ export default function Index() {
 
   useEffect(() => {
     const backAction = () => {
+      if (isPhotoOperationRunning()) return true;
       if (showCamera) {
         setShowCamera(false);
         return true;
@@ -103,6 +119,10 @@ export default function Index() {
       }
       if (showAbout) {
         setShowAbout(false);
+        return true;
+      }
+      if (showSettings) {
+        setShowSettings(false);
         return true;
       }
       // Exit app when on home screen
@@ -116,7 +136,7 @@ export default function Index() {
     );
 
     return () => backHandler.remove();
-  }, [showCamera, showGallery, showAbout]);
+  }, [showCamera, showGallery, showAbout, showSettings]);
 
   if (!isAuthenticated) {
     return (
@@ -127,6 +147,10 @@ export default function Index() {
         <Button onPress={() => void authenticate()} title="Authenticate" />
       </View>
     );
+  }
+
+  if (!settingsReady) {
+    return <View style={styles.container} />;
   }
 
   if (!permission) {
@@ -147,7 +171,25 @@ export default function Index() {
   }
 
   if (showCamera) {
-    return <CameraView onClose={() => setShowCamera(false)} />;
+    return (
+      <CameraView
+        encryptAutomatically={encryptAutomatically}
+        onClose={() => setShowCamera(false)}
+      />
+    );
+  }
+
+  if (showSettings) {
+    return (
+      <SettingsView
+        encryptAutomatically={encryptAutomatically}
+        onEncryptAutomaticallyChange={async (enabled) => {
+          await saveEncryptAutomatically(enabled);
+          setEncryptAutomatically(enabled);
+        }}
+        onClose={() => setShowSettings(false)}
+      />
+    );
   }
 
   if (showGallery) {
@@ -194,15 +236,24 @@ export default function Index() {
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.button}
+            disabled={isPhotoOperationRunning()}
             onPress={() => setShowCamera(true)}
           >
             <Text style={styles.buttonText}>Open Camera</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.button}
+            disabled={isPhotoOperationRunning()}
             onPress={() => setShowGallery(true)}
           >
             <Text style={styles.buttonText}>View Gallery</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.button}
+            disabled={isPhotoOperationRunning()}
+            onPress={() => setShowSettings(true)}
+          >
+            <Text style={styles.buttonText}>Settings</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.button}

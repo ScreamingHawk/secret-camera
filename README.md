@@ -1,6 +1,6 @@
 # Secret Camera App 📸
 
-An Android camera application built with Expo that stores captured photos as authenticated encrypted files in app-private storage.
+An Android camera application that stores captured photos in app-private storage, with optional authenticated encryption at rest.
 
 ## Features
 
@@ -13,7 +13,7 @@ An Android camera application built with Expo that stores captured photos as aut
 
 ## Vault, sharing and recovery
 
-Captured photos are encrypted on-device. The non-exportable key stays in Android Keystore; it is not tied to biometric authentication under the current key policy. Android cloud backup and device transfer explicitly exclude app data, including encrypted photos and temporary plaintext cache files, because restoring ciphertext without its device-bound key would be unusable. There is no cloud backup, key export, recovery password, or restore mechanism.
+Captured photos are encrypted on-device by default. The Settings page lets you disable encryption for future captures or encrypt/decrypt existing gallery photos in bulk. Photos saved with encryption disabled, and photos explicitly decrypted, remain in app-private storage but are unencrypted at rest. Changing the setting does not convert existing photos. The non-exportable encryption key stays in Android Keystore; it is not tied to biometric authentication under the current key policy. Android cloud backup and device transfer explicitly exclude app data. There is no cloud backup, key export, recovery password, or restore mechanism.
 
 Uninstalling the app removes its private photos and key. Moving to another device does not move the key or vault. Changing enrolled biometrics does not by itself invalidate this key because the key does not require biometric authorization; if Android Keystore nevertheless reports the key missing or unusable (for example after device/security-state changes), the app refuses to replace it for an existing vault. The encrypted photos then cannot be recovered. Keep any photos you need elsewhere before uninstalling or relying on this app.
 

@@ -13,6 +13,27 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class LegacyPhotoMigratorInstrumentedTest {
+  @Test fun decryptGalleryConversionPersistsReadablePlaintextAndRetainsSourceOnFailure() = fixture { dir, alias ->
+    val original = ByteArray(2048) { ((it * 17) % 251).toByte() }
+    val plain = File(dir, "roundtrip-input.jpg").apply { writeBytes(original) }
+    val encrypted = File(dir, "roundtrip.scv")
+    val codec = EncryptedPhotoCodec(dir, VaultKeyStore(alias), trustedOutputDir = dir)
+    codec.encrypt(plain.path, encrypted.path)
+    plain.delete()
+
+    val resultName = codec.decryptGalleryFile(encrypted.name)
+    val result = File(dir, resultName)
+    assertTrue(result.isFile)
+    assertArrayEquals(original, result.readBytes())
+    assertFalse(encrypted.exists())
+
+    val corrupt = File(dir, "corrupt.scv").apply { writeBytes(ByteArray(48) { 0x55 }) }
+    val corruptBytes = corrupt.readBytes()
+    assertThrows(Exception::class.java) { codec.decryptGalleryFile(corrupt.name) }
+    assertTrue("conversion failure must retain encrypted source", corrupt.isFile)
+    assertArrayEquals(corruptBytes, corrupt.readBytes())
+  }
+
   @Test fun migrationLeavesEncryptedAndNonJpegEntriesAlone() = fixture { dir, alias ->
     val legacy = File(dir, "legacy.jpeg").apply { writeBytes(ByteArray(96) { it.toByte() }) }
     val encryptedPlain = File(dir, "plain.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }

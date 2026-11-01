@@ -24,6 +24,12 @@ internal class LegacyPhotoMigrator(
     Result(migrated, eligibleSources().size, 0, null)
   }
 
+  /** Uses the same gallery mutation lock as encryption migration and deletion. */
+  fun decrypt(filename: String): String = synchronized(PhotoMutationGate.lock) {
+    require(filename.isNotBlank() && File(filename).name == filename && filename != "." && filename != "..")
+    codec().decryptGalleryFile(filename)
+  }
+
   private fun eligibleSources(): List<File> = gallery.listFiles()?.filter {
     !it.isSymbolicLink() && it.isFile &&
       (it.name.endsWith(".jpg", true) || it.name.endsWith(".jpeg", true))

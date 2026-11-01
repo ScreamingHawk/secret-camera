@@ -12,6 +12,8 @@ export type PhotoVaultKeyLifecycle = {
     failed: number;
     errorCode: string | null;
   }>;
+  /** Authenticates and durably converts one encrypted gallery file to private plaintext before removing its source. */
+  decryptGalleryPhoto(filename: string): Promise<string>;
   deleteGalleryPhoto(filename: string): Promise<void>;
   /** Retrieves the existing key or rejects without creating/replacing it. */
   requireExistingKey(): Promise<string>;

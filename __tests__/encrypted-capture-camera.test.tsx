@@ -35,7 +35,8 @@ const deferred = <T,>() => {
   });
   return { promise, resolve, reject };
 };
-const camera = () => TestRenderer.create(<CameraView onClose={jest.fn()} />);
+const camera = () =>
+  TestRenderer.create(<CameraView onClose={jest.fn()} encryptAutomatically />);
 const buttons = (tree: TestRenderer.ReactTestRenderer) =>
   tree.root.findAllByType(TouchableOpacity);
 const text = (tree: TestRenderer.ReactTestRenderer) =>

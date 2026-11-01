@@ -92,6 +92,13 @@ class PhotoVaultModule : Module() {
       }.migrate().let { mapOf("migrated" to it.migrated, "remaining" to it.remaining, "failed" to it.failed, "errorCode" to it.errorCode) }
     }
 
+    AsyncFunction("decryptGalleryPhoto") { filename: String ->
+      check(galleryDir().isDirectory) { "Private gallery is unavailable" }
+      LegacyPhotoMigrator(galleryDir(), captureCoordinator()) {
+        EncryptedPhotoCodec(galleryDir(), keys, trustedOutputDir = galleryDir())
+      }.decrypt(filename)
+    }
+
     AsyncFunction("deleteGalleryPhoto") { filename: String ->
       PhotoMutationGate.deleteGalleryPhoto(galleryDir(), filename)
     }

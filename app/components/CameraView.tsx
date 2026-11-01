@@ -15,6 +15,7 @@ import { savePhoto, type PhotoSaveStage } from '../utils/security';
 
 interface CameraViewProps {
   onClose: () => void;
+  encryptAutomatically: boolean;
 }
 
 type CaptureStatus =
@@ -43,7 +44,10 @@ const DISPLAY_CODES: Record<CaptureStatus, string> = {
   SOURCE_CLEANUP_INCOMPLETE: 'S7_CLEANUP',
 };
 
-export default function CameraView({ onClose }: CameraViewProps) {
+export default function CameraView({
+  onClose,
+  encryptAutomatically,
+}: CameraViewProps) {
   const [facing, setFacing] = useState<CameraType>('back');
   const cameraRef = useRef<ExpoCameraView>(null);
   const savingRef = useRef(false);
@@ -64,18 +68,19 @@ export default function CameraView({ onClose }: CameraViewProps) {
   useEffect(() => {
     (async () => {
       try {
-        await PhotoVault.prepareCaptureVault();
+        if (encryptAutomatically) await PhotoVault.prepareCaptureVault();
         readyRef.current = true;
       } catch {
         if (mountedRef.current) setCaptureStatus('VAULT_PREPARATION_FAILED');
       }
     })();
-  }, []);
+  }, [encryptAutomatically]);
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
+        if (savingRef.current) return true;
         onClose();
         return true;
       }
