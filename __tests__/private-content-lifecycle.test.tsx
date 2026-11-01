@@ -9,6 +9,7 @@ jest.mock('expo-camera', () => ({
 }));
 jest.mock('../app/utils/security', () => ({ authenticateUser: jest.fn() }));
 jest.mock('../app/components/CameraView', () => () => null);
+jest.mock('../app/components/SettingsView', () => () => null);
 jest.mock('../app/components/GalleryView', () => {
   const React = require('react');
   const { Text, TouchableOpacity } = require('react-native');
