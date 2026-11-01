@@ -17,6 +17,7 @@ jest.mock('expo-file-system', () => ({
   deleteAsync: jest.fn(),
   readAsStringAsync: jest.fn(),
   writeAsStringAsync: jest.fn(),
+  EncodingType: { Base64: 'base64' },
 }));
 jest.mock('expo-local-authentication', () => ({}));
 jest.mock('../modules/photo-vault/src/PhotoVault', () => ({
@@ -30,10 +31,13 @@ const getInfo = jest.mocked(FileSystem.getInfoAsync);
 const encrypt = jest.mocked(PhotoVault.encryptCapturedPhoto);
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  jest.resetAllMocks();
   getInfo.mockResolvedValue({ exists: true, size: 100 } as FileSystem.FileInfo);
   copy.mockResolvedValue(undefined);
   remove.mockResolvedValue(undefined);
+  jest
+    .mocked(FileSystem.readAsStringAsync)
+    .mockResolvedValue('synthetic-jpeg-base64');
   encrypt.mockResolvedValue({
     filename: 'photo-00000000-0000-0000-0000-000000000001.scv',
     sourceRemoved: true,
@@ -101,6 +105,75 @@ test('disabled capture is persisted and saved as a verified app-private plaintex
   });
   expect(saved.sourceRemoved).toBe(true);
 });
+
+test('plaintext capture attempts original cleanup even when staged cleanup fails', async () => {
+  let destinationLookup = 0;
+  getInfo.mockImplementation(
+    async (uri) =>
+      ({
+        exists: uri.includes('/.secret-camera/photo-')
+          ? ++destinationLookup > 1
+          : true,
+        size: 100,
+      }) as FileSystem.FileInfo
+  );
+  remove.mockImplementation(async (uri) => {
+    if (
+      uri.includes('/capture-') ||
+      uri === 'file:///private/camera/original.jpg'
+    )
+      throw new Error('cleanup denied');
+  });
+  const result = await savePhoto('file:///private/camera/original.jpg', false);
+  expect(result.sourceRemoved).toBe(false);
+  expect(remove).toHaveBeenCalledWith(expect.stringContaining('/capture-'), {
+    idempotent: true,
+  });
+  expect(remove).toHaveBeenCalledWith('file:///private/camera/original.jpg', {
+    idempotent: true,
+  });
+});
+
+test.each(['staging-copy', 'gallery-setup', 'gallery-copy'] as const)(
+  'plaintext %s failure removes only its staged copy and preserves camera original',
+  async (failure) => {
+    if (failure === 'staging-copy') {
+      copy.mockRejectedValueOnce(new Error('partial staging copy failed'));
+    } else if (failure === 'gallery-setup') {
+      getInfo.mockResolvedValueOnce({ exists: true } as FileSystem.FileInfo);
+      getInfo.mockRejectedValueOnce(new Error('gallery lookup failed'));
+    } else {
+      let destinationLookup = 0;
+      getInfo.mockImplementation(
+        async (uri) =>
+          ({
+            exists: uri.includes('/.secret-camera/photo-')
+              ? ++destinationLookup > 1
+              : true,
+            size: 100,
+          }) as FileSystem.FileInfo
+      );
+      copy
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('gallery copy failed'));
+    }
+    await expect(
+      savePhoto('file:///private/camera/original.jpg', false)
+    ).rejects.toMatchObject({
+      stage:
+        failure === 'gallery-setup'
+          ? 'SAVE_DIRECTORY_FAILED'
+          : 'SAVE_COPY_FAILED',
+    });
+    expect(remove).toHaveBeenCalledWith(expect.stringContaining('/capture-'), {
+      idempotent: true,
+    });
+    expect(remove).not.toHaveBeenCalledWith(
+      'file:///private/camera/original.jpg',
+      expect.anything()
+    );
+  }
+);
 
 test('encryption failure rejects and never copies camera source to gallery', async () => {
   encrypt.mockRejectedValue(new Error('native failure'));

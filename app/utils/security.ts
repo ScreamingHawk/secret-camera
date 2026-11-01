@@ -85,6 +85,10 @@ async function savePhotoOwned(
   try {
     await FileSystem.copyAsync({ from: sourceUri, to: staged });
   } catch (error) {
+    if (!encryptAutomatically)
+      await FileSystem.deleteAsync(staged, { idempotent: true }).catch(
+        () => undefined
+      );
     throw new PhotoSaveError('SAVE_COPY_FAILED', error);
   }
 
@@ -111,23 +115,19 @@ async function savePhotoOwned(
   }
 
   const gallery = APP_DIRECTORY.SECRET_CAMERA;
-  const galleryInfo = await FileSystem.getInfoAsync(gallery).catch((error) => {
-    throw new PhotoSaveError('SAVE_DIRECTORY_FAILED', error);
-  });
-  if (!galleryInfo.exists) {
-    try {
-      await FileSystem.makeDirectoryAsync(gallery, { intermediates: true });
-    } catch (error) {
-      throw new PhotoSaveError('SAVE_DIRECTORY_FAILED', error);
-    }
-  }
   const filename = `photo-${nonce}.jpg`;
   const destination = `${gallery}/${filename}`;
   let destinationCreated = false;
+  let destinationVerified = false;
+  let failureStage: PhotoSaveStage = 'SAVE_DIRECTORY_FAILED';
   try {
+    const galleryInfo = await FileSystem.getInfoAsync(gallery);
+    if (!galleryInfo.exists)
+      await FileSystem.makeDirectoryAsync(gallery, { intermediates: true });
     const existing = await FileSystem.getInfoAsync(destination);
     if (existing.exists)
       throw new Error('Refusing to overwrite existing photo');
+    failureStage = 'SAVE_COPY_FAILED';
     destinationCreated = true;
     await FileSystem.copyAsync({ from: staged, to: destination });
     const [sourceInfo, destinationInfo] = await Promise.all([
@@ -137,27 +137,49 @@ async function savePhotoOwned(
     if (
       !sourceInfo.exists ||
       !destinationInfo.exists ||
-      !destinationInfo.size ||
-      destinationInfo.size !== sourceInfo.size
-    ) {
+      !sourceInfo.size ||
+      destinationInfo.size !== sourceInfo.size ||
+      sourceInfo.size > 16 * 1024 * 1024
+    )
       throw new Error('Plaintext photo copy verification failed');
-    }
+    const base64 = FileSystem.EncodingType.Base64;
+    const sourceBytes = await FileSystem.readAsStringAsync(staged, {
+      encoding: base64,
+    });
+    const destinationBytes = await FileSystem.readAsStringAsync(destination, {
+      encoding: base64,
+    });
+    if (sourceBytes !== destinationBytes)
+      throw new Error('Plaintext photo content verification failed');
+    destinationVerified = true;
   } catch (error) {
     if (destinationCreated)
       await FileSystem.deleteAsync(destination, { idempotent: true }).catch(
         () => undefined
       );
-    throw new PhotoSaveError('SAVE_COPY_FAILED', error);
+    throw new PhotoSaveError(failureStage, error);
+  } finally {
+    if (!destinationVerified)
+      await FileSystem.deleteAsync(staged, { idempotent: true }).catch(
+        () => undefined
+      );
   }
-  let sourceRemoved = false;
+
+  let stagedRemoved = false;
+  let originalRemoved = false;
   try {
     await FileSystem.deleteAsync(staged, { idempotent: true });
-    await FileSystem.deleteAsync(sourceUri, { idempotent: true });
-    sourceRemoved = true;
+    stagedRemoved = true;
   } catch {
-    /* The verified gallery copy is committed; leave recoverable source files. */
+    /* committed photo remains; report cleanup failure */
   }
-  return { uri: destination, sourceRemoved };
+  try {
+    await FileSystem.deleteAsync(sourceUri, { idempotent: true });
+    originalRemoved = true;
+  } catch {
+    /* original remains recoverable */
+  }
+  return { uri: destination, sourceRemoved: stagedRemoved && originalRemoved };
 }
 
 export async function getPhotoUri(uri: string): Promise<string> {
