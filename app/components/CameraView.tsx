@@ -114,7 +114,7 @@ export default function CameraView({
         return;
       }
       phase = 'save';
-      const result = await savePhoto(photo.uri);
+      const result = await savePhoto(photo.uri, encryptAutomatically);
       if (!result.sourceRemoved && mountedRef.current)
         setCaptureStatus('SOURCE_CLEANUP_INCOMPLETE');
     } catch (error) {

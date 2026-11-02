@@ -35,8 +35,13 @@ const deferred = <T,>() => {
   });
   return { promise, resolve, reject };
 };
-const camera = () =>
-  TestRenderer.create(<CameraView onClose={jest.fn()} encryptAutomatically />);
+const camera = (encryptAutomatically = true) =>
+  TestRenderer.create(
+    <CameraView
+      onClose={jest.fn()}
+      encryptAutomatically={encryptAutomatically}
+    />
+  );
 const buttons = (tree: TestRenderer.ReactTestRenderer) =>
   tree.root.findAllByType(TouchableOpacity);
 const text = (tree: TestRenderer.ReactTestRenderer) =>
@@ -78,6 +83,18 @@ beforeEach(() => {
     uri: 'file:///gallery/photo.scv',
     sourceRemoved: true,
   });
+});
+
+test('passes the automatic-encryption setting to the save boundary', async () => {
+  let tree!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    tree = camera(false);
+  });
+  await flush();
+  await tap(buttons(tree)[1]);
+  expect(save).toHaveBeenLastCalledWith('file:///camera/shot.jpg', false);
+  expect(prepare).not.toHaveBeenCalled();
+  tree.unmount();
 });
 
 test('switches camera facing from back to front and back', async () => {
@@ -171,7 +188,7 @@ test('finishes save ownership after unmount without stale UI updates', async () 
     buttons(tree)[1].props.onPress();
     await Promise.resolve();
   });
-  expect(save).toHaveBeenCalledWith('file:///camera/shot.jpg');
+  expect(save).toHaveBeenCalledWith('file:///camera/shot.jpg', true);
   tree.unmount();
   await act(async () => {
     saved.resolve({ uri: 'file:///gallery/photo.scv', sourceRemoved: true });
