@@ -10,6 +10,22 @@ import java.util.UUID
 
 private const val DELIVERY_PROOF = "expo.modules.photovault.delivery-proof"
 
+internal data class PendingImageImportTarget(val filename: String, val encrypted: Boolean)
+
+/** Existing committed format wins; otherwise a pre-commit retry uses the current persisted setting. */
+internal fun selectPendingImageImportTarget(gallery: File, id: String, requestedEncrypted: Boolean): PendingImageImportTarget {
+  require(id.matches(Regex("[0-9a-f-]{36}"))) { "Invalid pending image identifier" }
+  val plain = File(gallery, "photo-share-$id.jpg")
+  val encrypted = File(gallery, "photo-share-$id.scv")
+  require(!(plain.exists() && encrypted.exists())) { "Conflicting import destinations exist" }
+  return when {
+    encrypted.exists() -> PendingImageImportTarget(encrypted.name, true)
+    plain.exists() -> PendingImageImportTarget(plain.name, false)
+    requestedEncrypted -> PendingImageImportTarget(encrypted.name, true)
+    else -> PendingImageImportTarget(plain.name, false)
+  }
+}
+
 class PhotoVaultModule : Module() {
   private val cleanupHandler = Handler(Looper.getMainLooper())
   private val cleanupExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -83,25 +99,18 @@ class PhotoVaultModule : Module() {
   private fun importPendingImage(id: String, encrypted: Boolean): String = synchronized(PhotoMutationGate.lock) {
     require(id.matches(Regex("[0-9a-f-]{36}"))) { "Invalid pending image identifier" }
     val staged = pendingShares.consume(id) ?: error("Pending image is no longer available")
-    val modeKey = "importEncrypted.$id"
-    val mode = if (pendingPreferenceStore.contains(modeKey)) {
-      pendingPreferenceStore.getBoolean(modeKey, !encrypted)
-    } else {
-      check(pendingPreferenceStore.edit().putBoolean(modeKey, encrypted).commit()) { "Unable to retain import setting" }
-      encrypted
-    }
-    require(mode == encrypted) { "Import setting changed; retry with the setting used for this request" }
-
     val gallery = galleryDir()
     check(gallery.exists() || gallery.mkdirs()) { "Private gallery unavailable" }
-    val leaf = "photo-share-$id.${if (encrypted) "scv" else "jpg"}"
+    val target = selectPendingImageImportTarget(gallery, id, encrypted)
+    val committedEncrypted = target.encrypted
+    val leaf = target.filename
     val source = File(java.net.URI(staged.uri))
     check(source.canonicalFile.parentFile == File(context.filesDir, ".secret-camera-pending").canonicalFile && source.isFile) {
       "Owned pending image is unavailable"
     }
     val temp = File(context.filesDir, ".pending-import-$id.jpg")
     try {
-      if (encrypted) captureCoordinator().prepareCaptureVault()
+      if (committedEncrypted) captureCoordinator().prepareCaptureVault()
       check(!temp.exists() || temp.delete()) { "Unable to clear owned import staging" }
       source.inputStream().use { input -> temp.outputStream().use { output ->
         input.copyTo(output); output.fd.sync()
@@ -110,7 +119,10 @@ class PhotoVaultModule : Module() {
         "Owned import staging verification failed"
       }
       EncryptedPhotoCodec(context.filesDir, keys, trustedOutputDir = gallery)
-        .importImage(temp.path, leaf, encrypted)
+        .importImage(temp.path, leaf, committedEncrypted)
+      check(pendingPreferenceStore.edit().putBoolean("importCommitted.$id", committedEncrypted).commit()) {
+        "Unable to record verified import"
+      }
       leaf
     } finally { temp.delete() }
   }
@@ -176,7 +188,10 @@ class PhotoVaultModule : Module() {
     }
     AsyncFunction("acknowledgePendingImageShare") { id: String ->
       pendingShares.acknowledge(id)
-      pendingPreferenceStore.edit().remove("importEncrypted.$id").apply()
+      pendingPreferenceStore.edit()
+        .remove("importEncrypted.$id")
+        .remove("importCommitted.$id")
+        .apply()
     }
     AsyncFunction("consumePendingImageShareFailure") {
       val failed = pendingPreferenceStore.getBoolean("receiveFailurePending", false)

@@ -35,7 +35,9 @@ beforeEach(() => {
     uri: 'file:///private/pending.jpg',
     mimeType: 'image/jpeg',
   });
-  commit.mockResolvedValue({ filename: `photo-share-${pendingId}.scv` });
+  commit.mockImplementation(async (_id, enabled) => ({
+    filename: `photo-share-${pendingId}.${enabled ? 'scv' : 'jpg'}`,
+  }));
   ack.mockResolvedValue(undefined);
 });
 
@@ -46,21 +48,28 @@ test.each([true, false])(
     expect(commit).toHaveBeenCalledWith(pendingId, enabled);
     expect(ack).toHaveBeenCalledWith(pendingId);
     expect(result.imported).toEqual([
-      expect.stringContaining(`photo-share-${pendingId}.scv`),
+      expect.stringContaining(
+        `photo-share-${pendingId}.${enabled ? 'scv' : 'jpg'}`
+      ),
     ]);
     expect(result.failed).toBe(0);
     expect(result.stageFailure).toBe(false);
   }
 );
 
-test('failed commit preserves staged request for retry and never acknowledges it', async () => {
-  commit.mockRejectedValueOnce(new Error('synthetic encryption failure'));
+test('pre-commit failure can retry with changed setting without acknowledging the request', async () => {
+  commit.mockRejectedValueOnce(
+    new Error('synthetic failure before publication')
+  );
   const failed = await importPendingSharedImages(true);
   expect(failed).toEqual({ imported: [], failed: 1, stageFailure: false });
   expect(ack).not.toHaveBeenCalled();
-  commit.mockResolvedValueOnce({ filename: `photo-share-${pendingId}.scv` });
-  const retried = await importPendingSharedImages(true);
+  commit.mockResolvedValueOnce({ filename: `photo-share-${pendingId}.jpg` });
+  const retried = await importPendingSharedImages(false);
+  expect(commit).toHaveBeenNthCalledWith(1, pendingId, true);
+  expect(commit).toHaveBeenNthCalledWith(2, pendingId, false);
   expect(retried.failed).toBe(0);
+  expect(retried.stageFailure).toBe(false);
   expect(ack).toHaveBeenCalledTimes(1);
 });
 
