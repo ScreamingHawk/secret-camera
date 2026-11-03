@@ -43,6 +43,13 @@ export default function AboutView({ onClose }: AboutViewProps) {
           inaccessible. Sharing creates a temporary plaintext JPEG that the
           receiving app may retain.
         </Text>
+        <Text style={styles.description}>
+          Android photo-picker imports currently accept valid JPEG images only.
+          They copy an image into the private gallery; the original remains in
+          its existing gallery or storage and is not made private by importing.
+          The current persisted automatic-encryption setting is used after
+          authentication.
+        </Text>
         <Text style={styles.subtitle}>Features:</Text>
         <Text style={styles.feature}>• Device authentication</Text>
         <Text style={styles.feature}>• Front and back camera support</Text>

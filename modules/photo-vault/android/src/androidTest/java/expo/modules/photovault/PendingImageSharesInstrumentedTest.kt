@@ -13,6 +13,39 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PendingImageSharesInstrumentedTest {
+  @Test fun pickerFileAdmissionCopiesOnlyUuidJpegFromExpoImagePickerCache() {
+    val base = File(
+      androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir,
+      "picker-cache-admission-${UUID.randomUUID()}"
+    ).apply { mkdirs() }
+    val appCache = File(base, "cache").apply { mkdirs() }
+    val pickerCache = File(appCache, "ImagePicker").apply { mkdirs() }
+    val privateFiles = File(base, "files").apply { mkdirs() }
+    val pendingDir = File(privateFiles, ".secret-camera-pending")
+    val bitmap = Bitmap.createBitmap(4, 3, Bitmap.Config.ARGB_8888)
+    val bytes = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, 96, it); bitmap.recycle() }.toByteArray()
+    val original = File(base, "original.jpg").apply { writeBytes(bytes) }
+    val image = File(pickerCache, "${UUID.randomUUID()}.jpeg").apply { writeBytes(original.readBytes()) }
+    val coordinator = PendingImageShares(pendingDir, { null }, { null })
+    try {
+      val pending = coordinator.stagePickerImageFile(Uri.fromFile(image), appCache)
+      assertArrayEquals(bytes, File(java.net.URI(pending.uri)).readBytes())
+      assertArrayEquals(bytes, original.readBytes())
+      assertFalse("owned picker cache copy should be removed", image.exists())
+      assertEquals(1, coordinator.list().size)
+      assertThrows(IllegalArgumentException::class.java) {
+        coordinator.stagePickerImageFile(Uri.fromFile(original), appCache)
+      }
+      assertArrayEquals(bytes, original.readBytes())
+      val corrupt = File(pickerCache, "${UUID.randomUUID()}.png").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+      assertThrows(IllegalArgumentException::class.java) {
+        coordinator.stagePickerImageFile(Uri.fromFile(corrupt), appCache)
+      }
+      assertFalse("rejected owned cache copy should be removed", corrupt.exists())
+      assertEquals(1, coordinator.list().size)
+    } finally { base.deleteRecursively() }
+  }
+
   @Test fun encryptedImportRoundTripsIsIdempotentAndRejectsMismatchedRetryWithoutChangingSources() {
     val bitmap = Bitmap.createBitmap(5, 4, Bitmap.Config.ARGB_8888)
     val original = ByteArrayOutputStream().also {

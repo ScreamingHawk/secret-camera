@@ -17,6 +17,7 @@ export type PhotoVaultKeyLifecycle = {
     eventName: 'pendingImageSharesChanged',
     listener: (event: { failed?: boolean }) => void
   ): { remove(): void };
+  stagePickedImage(uri: string): Promise<void>;
   /** Explicitly creates the first key; rejects if the stable alias already exists. */
   initializeNewVault(): Promise<string>;
   /** Prepares a new capture vault or refuses when initialized state lost its key. */

@@ -1,10 +1,12 @@
 import { useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
 import {
   AppState,
   BackHandler,
   Button,
   Image,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -44,6 +46,8 @@ export default function Index() {
   const [importNotice, setImportNotice] = useState('');
   const importBusy = useRef(false);
   const importAgain = useRef(false);
+  const pickerInFlight = useRef(false);
+  const [pickerNotice, setPickerNotice] = useState('');
 
   const authenticate = async () => {
     if (authInFlight.current) return;
@@ -102,7 +106,17 @@ export default function Index() {
       // go directly to background, which remains a real relock boundary.
       if (state === 'inactive') return;
       appActive.current = state === 'active';
-      if (state === 'active') setPendingRefresh((value) => value + 1);
+      if (state === 'active') {
+        setPendingRefresh((value) => value + 1);
+        if (!wasActive && !sharing.current) {
+          setSettingsReady(false);
+          void loadEncryptAutomatically().then((enabled) => {
+            if (!mounted.current || !appActive.current) return;
+            setEncryptAutomatically(enabled);
+            setSettingsReady(true);
+          });
+        }
+      }
       if (state === 'background') {
         authGeneration.current += 1;
         resumePending.current = true;
@@ -126,8 +140,78 @@ export default function Index() {
     };
   }, []);
 
+  const choosePhotos = async () => {
+    if (pickerInFlight.current || isPhotoOperationRunning()) return;
+    const authGenerationBeforePicker = authGeneration.current;
+    pickerInFlight.current = true;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        quality: 1,
+        exif: false,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      let stageFailures = 0;
+      for (const asset of result.assets) {
+        try {
+          await PhotoVault.stagePickedImage(asset.uri);
+        } catch {
+          stageFailures += 1;
+        }
+      }
+      setPickerNotice(
+        stageFailures
+          ? `${result.assets.length - stageFailures} staged; ${stageFailures} failed. Supported formats are valid JPEG images only. Original photos remain unchanged in existing storage.`
+          : 'Selected JPEGs are staged privately. Original photos remain unchanged in existing storage.'
+      );
+      setImportNotice(
+        stageFailures
+          ? `${result.assets.length - stageFailures} selected JPEG${result.assets.length - stageFailures === 1 ? '' : 's'} staged; ${stageFailures} failed. Original photos remain unchanged in existing storage.`
+          : ''
+      );
+      // Block normal pending-share processing until every picker asset has either staged or failed.
+      if (
+        appActive.current &&
+        authGenerationBeforePicker === authGeneration.current
+      ) {
+        setIsAuthenticated(false);
+        setSettingsReady(false);
+        setPrivacyCovered(false);
+        resumePending.current = false;
+        const currentSetting = await loadEncryptAutomatically();
+        if (mounted.current) {
+          setEncryptAutomatically(currentSetting);
+          setSettingsReady(true);
+          void authenticate();
+        }
+      } else if (appActive.current) {
+        setPendingRefresh((value) => value + 1);
+      }
+    } catch {
+      setPickerNotice(
+        'Selected photos could not be staged. Originals remain unchanged.'
+      );
+    } finally {
+      pickerInFlight.current = false;
+      if (
+        importAgain.current &&
+        mounted.current &&
+        appActive.current &&
+        isAuthenticated
+      ) {
+        importAgain.current = false;
+        setPendingRefresh((value) => value + 1);
+      }
+    }
+  };
+
   useEffect(() => {
     if (!isAuthenticated || !settingsReady || !appActive.current) return;
+    if (pickerInFlight.current) {
+      importAgain.current = true;
+      return;
+    }
     if (importBusy.current) {
       importAgain.current = true;
       return;
@@ -270,8 +354,20 @@ export default function Index() {
           onClose={() => setShowGallery(false)}
           onShareState={onShareState}
           refreshKey={galleryRefresh}
-          importNotice={importNotice}
+          importNotice={
+            pickerNotice && importNotice
+              ? `${pickerNotice} ${importNotice}`
+              : pickerNotice || importNotice
+          }
           onRetryImports={() => setPendingRefresh((value) => value + 1)}
+          onImportPhotos={
+            Platform.OS === 'android'
+              ? () => {
+                  setShowGallery(false);
+                  void choosePhotos();
+                }
+              : undefined
+          }
         />
         {privacyCovered && (
           <View pointerEvents="auto" style={styles.coverOverlay}>
@@ -321,6 +417,24 @@ export default function Index() {
           >
             <Text style={styles.buttonText}>View Gallery</Text>
           </TouchableOpacity>
+          {Platform.OS === 'android' && (
+            <>
+              <TouchableOpacity
+                style={styles.button}
+                disabled={isPhotoOperationRunning() || pickerInFlight.current}
+                onPress={() => void choosePhotos()}
+              >
+                <Text style={styles.buttonText}>Import JPEG Photos</Text>
+              </TouchableOpacity>
+              <Text style={styles.message}>
+                Only valid JPEG images up to 32 MiB each are accepted. Originals
+                remain unchanged in existing storage.
+              </Text>
+            </>
+          )}
+          {pickerNotice !== '' && (
+            <Text style={styles.message}>{pickerNotice}</Text>
+          )}
           <TouchableOpacity
             style={styles.button}
             disabled={isPhotoOperationRunning()}

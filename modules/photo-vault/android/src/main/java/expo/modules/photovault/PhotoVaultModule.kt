@@ -198,6 +198,11 @@ class PhotoVaultModule : Module() {
       if (failed) check(pendingPreferenceStore.edit().remove("receiveFailurePending").commit())
       failed
     }
+    AsyncFunction("stagePickedImage") { uriString: String ->
+      val uri = android.net.Uri.parse(uriString)
+      pendingShares.stagePickerImageFile(uri, context.cacheDir)
+      Unit
+    }
     AsyncFunction("importPendingImageShare") { id: String, encryptAutomatically: Boolean ->
       mapOf("filename" to importPendingImage(id, encryptAutomatically))
     }

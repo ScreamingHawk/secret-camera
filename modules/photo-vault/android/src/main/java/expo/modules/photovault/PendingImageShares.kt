@@ -8,6 +8,7 @@ import android.net.Uri
 import android.system.Os
 import android.system.OsConstants
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.UUID
 import kotlin.math.max
@@ -42,12 +43,33 @@ internal class PendingImageShares(
       }
       val staged = uris.mapIndexed { index, uri ->
         val requestId = UUID.nameUUIDFromBytes("$token:$index".toByteArray(Charsets.UTF_8)).toString()
+        require(uri.scheme == ContentResolver.SCHEME_CONTENT) { "Unsupported shared image URI" }
         stage(uri, intent.type, requestId)
       }
       markDeliverySeen(token)
       return staged
     } finally {
       synchronized(deliveries) { deliveries.remove(token) }
+    }
+  }
+
+  /** Copies only Expo ImagePicker's UUID JPEG cache output into owned private staging. */
+  fun stagePickerImageFile(uri: Uri, appCacheRoot: File): Pending {
+    require(uri.scheme == "file") { "Unsupported picker image URI" }
+    val trustedCache = appCacheRoot.canonicalFile
+    val cacheRoot = File(trustedCache, "ImagePicker").canonicalFile
+    require(cacheRoot.parentFile == trustedCache) { "Picker cache root is outside app cache" }
+    val candidate = File(uri.path ?: error("Picker image path unavailable"))
+    require(candidate.isAbsolute && candidate.toPath().toAbsolutePath().normalize().toFile() == candidate.canonicalFile) { "Picker image path is not canonical" }
+    require(candidate.canonicalFile.parentFile == cacheRoot) { "Picker image is outside Expo ImagePicker cache" }
+    require(candidate.name.matches(Regex("[0-9a-fA-F-]{36}\\.[a-zA-Z0-9]{1,8}"))) { "Unsupported picker cache image" }
+    val stat = Os.lstat(candidate.path)
+    require((stat.st_mode and OsConstants.S_IFMT) == OsConstants.S_IFREG) { "Picker image must be a regular file" }
+    try {
+      return stage(Uri.fromFile(candidate), "image/jpeg", UUID.randomUUID().toString()) { FileInputStream(candidate) }
+    } finally {
+      // Expo made this app-owned cache copy; the selected provider original is untouched.
+      candidate.delete()
     }
   }
 
@@ -74,7 +96,8 @@ internal class PendingImageShares(
     try { Os.fsync(fd) } finally { Os.close(fd) }
   }
 
-  private fun stage(uri: Uri, declared: String?, id: String): Pending {
+  @Synchronized
+  private fun stage(uri: Uri, declared: String?, id: String, source: () -> java.io.InputStream? = { openSource(uri) }): Pending {
     require(id.matches(ID_PATTERN))
     check(directory.exists() || directory.mkdirs()) { "Private pending image storage unavailable" }
     val target = File(directory, "pending-$id.jpg")
@@ -90,7 +113,6 @@ internal class PendingImageShares(
     require(actualType == null || declaredType == null || declaredType == "image/*" || actualType == declaredType) {
       "Shared image MIME type does not match its content provider"
     }
-    require(uri.scheme == ContentResolver.SCHEME_CONTENT) { "Unsupported shared image URI" }
 
     val existing = list().filter { it.id != id }
     require(existing.size < MAX_PENDING_COUNT) { "Too many pending shared images" }
@@ -99,7 +121,7 @@ internal class PendingImageShares(
     val partial = File(directory, "pending-$id.jpg.part")
     check(!partial.exists() || partial.delete()) { "Unable to clear owned partial image" }
     try {
-      val input = openSource(uri) ?: error("Shared image is unavailable")
+      val input = source() ?: error("Shared image is unavailable")
       input.use { source ->
         FileOutputStream(partial).use { output ->
           val header = ByteArray(12)

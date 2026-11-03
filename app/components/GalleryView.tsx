@@ -23,6 +23,7 @@ interface GalleryViewProps {
   refreshKey?: number;
   importNotice?: string;
   onRetryImports?: () => void;
+  onImportPhotos?: () => void;
 }
 
 export default function GalleryView({
@@ -31,6 +32,7 @@ export default function GalleryView({
   refreshKey = 0,
   importNotice = '',
   onRetryImports,
+  onImportPhotos,
 }: GalleryViewProps) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
@@ -146,6 +148,17 @@ export default function GalleryView({
       >
         <Ionicons name="close" size={32} color="black" />
       </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.importButton}
+        onPress={onImportPhotos}
+        disabled={!onImportPhotos || isPhotoOperationRunning()}
+      >
+        <Text style={styles.importButtonText}>Import photos</Text>
+      </TouchableOpacity>
+      <Text style={styles.importHelp}>
+        Imports valid JPEG images up to 32 MiB each. Originals remain unchanged
+        in their existing storage.
+      </Text>
       {importNotice !== '' && (
         <View style={styles.importNotice}>
           <Text>{importNotice}</Text>
@@ -228,6 +241,16 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   importNotice: { paddingHorizontal: 16, paddingBottom: 8 },
+  importButton: {
+    alignSelf: 'flex-start',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 10,
+    backgroundColor: '#4A90E2',
+    borderRadius: 6,
+  },
+  importButtonText: { color: 'white', fontWeight: '600' },
+  importHelp: { paddingHorizontal: 16, paddingBottom: 8, color: '#444' },
   retryText: { color: '#2466a2', fontWeight: '600', paddingTop: 4 },
   image: {
     borderRadius: 8,
