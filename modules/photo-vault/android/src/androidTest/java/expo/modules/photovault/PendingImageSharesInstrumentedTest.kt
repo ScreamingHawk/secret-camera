@@ -43,8 +43,8 @@ class PendingImageSharesInstrumentedTest {
       codec.importImage(source.path, leaf, encrypted = true)
       assertArrayEquals(ciphertext, encrypted.readBytes())
 
-      val roundTrip = File(base, "round-trip.jpg")
-      EncryptedPhotoCodec(gallery, VaultKeyStore(alias), trustedOutputDir = base).decrypt(encrypted.path, roundTrip.path)
+      val roundTrip = File(gallery, "round-trip.jpg")
+      EncryptedPhotoCodec(gallery, VaultKeyStore(alias)).decrypt(encrypted.path, roundTrip.path)
       assertArrayEquals(original, roundTrip.readBytes())
 
       assertThrows(Exception::class.java) {
