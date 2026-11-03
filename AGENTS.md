@@ -10,7 +10,7 @@ Implementation is authorized for the publishing chain: `sc-21g` (deterministic v
 
 Prioritise short implementation-to-phone-feedback cycles, not complete coverage. For small UI-only changes, use relevant existing regression tests, typecheck and the ordinary build/bundle check. Do not add a benchmark framework, exhaustive device matrix or repeated native-security runs for unchanged native paths. Deeper checks belong to changes affecting encryption, authentication, conversion or deletion. Preserve signing, upgrades and photo data; never claim a speedup from mocked tests. A representative phone check can supply performance acceptance. Existing CI remains enabled.
 
-Read the exact current ticket for execution authority: the kickoff assignments above are historical, not the current completion state. The gallery change is released as v1.1.7 with speed improvement unmeasured and phone feedback outstanding. The user authorised sc-s5q (Settings, automatic encryption toggle and bulk encrypt/decrypt) next; only that bounded task is authorised now. Other backlog work and another signed release need their own approval.
+Read the exact current ticket for execution authority: the kickoff assignments above are historical, not the current completion state. Settings and the automatic-encryption capture fix are released through v1.1.9; the user confirmed the toggle works. The user now authorised only sc-a5d: incoming Android image-share import honouring that setting. Native URI reception, regenerable manifest/config wiring and authenticated app/storage integration are in scope as needed. Picker import, other backlog work and another signed release need their own approval.
 
 ## Approved scope and release direction
 
