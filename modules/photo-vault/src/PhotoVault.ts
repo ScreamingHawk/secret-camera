@@ -1,6 +1,22 @@
 import { requireNativeModule } from 'expo-modules-core';
 
 export type PhotoVaultKeyLifecycle = {
+  listPendingImageShares(): Promise<
+    Array<{ id: string; uri: string; mimeType: string }>
+  >;
+  consumePendingImageShare(
+    id: string
+  ): Promise<{ id: string; uri: string; mimeType: string } | null>;
+  acknowledgePendingImageShare(id: string): Promise<void>;
+  consumePendingImageShareFailure(): Promise<boolean>;
+  importPendingImageShare(
+    id: string,
+    encryptAutomatically: boolean
+  ): Promise<{ filename: string }>;
+  addListener(
+    eventName: 'pendingImageSharesChanged',
+    listener: (event: { failed?: boolean }) => void
+  ): { remove(): void };
   /** Explicitly creates the first key; rejects if the stable alias already exists. */
   initializeNewVault(): Promise<string>;
   /** Prepares a new capture vault or refuses when initialized state lost its key. */

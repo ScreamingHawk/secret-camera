@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import PhotoVault from '../modules/photo-vault/src/PhotoVault';
 import AboutView from './components/AboutView';
 import CameraView from './components/CameraView';
 import GalleryView from './components/GalleryView';
@@ -20,6 +21,7 @@ import {
   saveEncryptAutomatically,
 } from './utils/photoSettings';
 import { authenticateUser } from './utils/security';
+import { importPendingSharedImages } from './utils/sharedImageImport';
 
 export default function Index() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -37,6 +39,11 @@ export default function Index() {
   const resumePending = useRef(false);
   const authGeneration = useRef(0);
   const [privacyCovered, setPrivacyCovered] = useState(false);
+  const [pendingRefresh, setPendingRefresh] = useState(0);
+  const [galleryRefresh, setGalleryRefresh] = useState(0);
+  const [importNotice, setImportNotice] = useState('');
+  const importBusy = useRef(false);
+  const importAgain = useRef(false);
 
   const authenticate = async () => {
     if (authInFlight.current) return;
@@ -72,6 +79,17 @@ export default function Index() {
   useEffect(() => {
     mounted.current = true;
     void authenticate();
+    const pendingSubscription = PhotoVault.addListener(
+      'pendingImageSharesChanged',
+      (event) => {
+        if (event.failed) {
+          setImportNotice(
+            'Secret Camera could not read or stage the share. It accepts valid JPEGs only (32 MiB each; pending storage 20 images/64 MiB). The sender original was not changed; check the format and size, then retry.'
+          );
+        }
+        setPendingRefresh((value) => value + 1);
+      }
+    );
     void loadEncryptAutomatically().then((enabled) => {
       if (mounted.current) {
         setEncryptAutomatically(enabled);
@@ -84,6 +102,7 @@ export default function Index() {
       // go directly to background, which remains a real relock boundary.
       if (state === 'inactive') return;
       appActive.current = state === 'active';
+      if (state === 'active') setPendingRefresh((value) => value + 1);
       if (state === 'background') {
         authGeneration.current += 1;
         resumePending.current = true;
@@ -102,9 +121,49 @@ export default function Index() {
     });
     return () => {
       mounted.current = false;
+      pendingSubscription.remove();
       subscription.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !settingsReady || !appActive.current) return;
+    if (importBusy.current) {
+      importAgain.current = true;
+      return;
+    }
+    importBusy.current = true;
+    void importPendingSharedImages(encryptAutomatically)
+      .then(({ imported, failed, stageFailure }) => {
+        if (!mounted.current) return;
+        if (stageFailure || failed || imported.length) {
+          setImportNotice(
+            stageFailure
+              ? 'Secret Camera could not read or stage the share. It accepts valid JPEGs only (32 MiB each; pending storage 20 images/64 MiB). The sender original was not changed; check the format and size, then retry.'
+              : failed
+                ? `${failed} shared image${failed === 1 ? '' : 's'} could not be imported; the staged private copy remains available to retry.`
+                : ''
+          );
+        }
+        if (imported.length) {
+          setGalleryRefresh((value) => value + 1);
+          setShowGallery(true);
+        }
+      })
+      .catch(() => {
+        if (mounted.current)
+          setImportNotice(
+            'Shared images could not be checked. Retry when Secret Camera is active.'
+          );
+      })
+      .finally(() => {
+        importBusy.current = false;
+        if (importAgain.current && mounted.current) {
+          importAgain.current = false;
+          setPendingRefresh((value) => value + 1);
+        }
+      });
+  }, [isAuthenticated, settingsReady, encryptAutomatically, pendingRefresh]);
 
   useEffect(() => {
     const backAction = () => {
@@ -210,6 +269,9 @@ export default function Index() {
         <GalleryView
           onClose={() => setShowGallery(false)}
           onShareState={onShareState}
+          refreshKey={galleryRefresh}
+          importNotice={importNotice}
+          onRetryImports={() => setPendingRefresh((value) => value + 1)}
         />
         {privacyCovered && (
           <View pointerEvents="auto" style={styles.coverOverlay}>
@@ -234,6 +296,17 @@ export default function Index() {
           resizeMode="contain"
         />
         <View style={styles.buttonContainer}>
+          {importNotice !== '' && (
+            <View>
+              <Text style={styles.message}>{importNotice}</Text>
+              <TouchableOpacity
+                style={styles.button}
+                onPress={() => setPendingRefresh((value) => value + 1)}
+              >
+                <Text style={styles.buttonText}>Retry import</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           <TouchableOpacity
             style={styles.button}
             disabled={isPhotoOperationRunning()}

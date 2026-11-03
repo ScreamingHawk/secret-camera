@@ -6,6 +6,9 @@ import android.os.Handler
 import android.os.Looper
 
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.util.UUID
+
+private const val DELIVERY_PROOF = "expo.modules.photovault.delivery-proof"
 
 class PhotoVaultModule : Module() {
   private val cleanupHandler = Handler(Looper.getMainLooper())
@@ -29,6 +32,89 @@ class PhotoVaultModule : Module() {
   }
   private val shareExports by lazy { ShareExportCoordinator(shareDir()) }
   private val keys = VaultKeyStore()
+  private val pendingPreferenceStore by lazy {
+    context.getSharedPreferences("pending-image-shares", android.content.Context.MODE_PRIVATE)
+  }
+  private val deliverySecret: ByteArray by lazy {
+    val encoded = pendingPreferenceStore.getString("deliverySecret", null)
+    if (encoded != null) android.util.Base64.decode(encoded, android.util.Base64.NO_WRAP)
+    else ByteArray(32).also { bytes ->
+      java.security.SecureRandom().nextBytes(bytes)
+      check(pendingPreferenceStore.edit().putString("deliverySecret", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)).commit())
+    }
+  }
+  private fun deliveryProof(token: String): String {
+    val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+    mac.init(javax.crypto.spec.SecretKeySpec(deliverySecret, "HmacSHA256"))
+    return android.util.Base64.encodeToString(mac.doFinal(token.toByteArray(Charsets.UTF_8)), android.util.Base64.NO_WRAP)
+  }
+  private val pendingShares by lazy {
+    val resolver = context.contentResolver
+    PendingImageShares(
+      File(context.filesDir, ".secret-camera-pending"), resolver::getType, resolver::openInputStream,
+      { pendingPreferenceStore.getString("lastDeliveryToken", null) == it },
+      { token -> check(pendingPreferenceStore.edit().putString("lastDeliveryToken", token).commit()) }
+    )
+  }
+  private val pendingShareExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+  private fun receiveShare(intent: android.content.Intent) {
+    val suppliedToken = intent.getStringExtra(PendingImageShares.DELIVERY_TOKEN)
+    val suppliedProof = intent.getStringExtra(DELIVERY_PROOF)
+    val token = if (suppliedToken != null && suppliedProof != null &&
+      java.security.MessageDigest.isEqual(suppliedProof.toByteArray(), deliveryProof(suppliedToken).toByteArray())) {
+      suppliedToken
+    } else UUID.randomUUID().toString()
+    intent.putExtra(PendingImageShares.DELIVERY_TOKEN, token)
+    intent.putExtra(DELIVERY_PROOF, deliveryProof(token))
+    appContext.currentActivity?.intent = intent
+    val isShareIntent = intent.action == android.content.Intent.ACTION_SEND || intent.action == android.content.Intent.ACTION_SEND_MULTIPLE
+    pendingShareExecutor.execute {
+      val result = runCatching { pendingShares.receive(intent) }
+      if (result.getOrNull()?.isNotEmpty() == true) {
+        sendEvent("pendingImageSharesChanged", mapOf("failed" to false))
+      } else if (isShareIntent && result.isFailure) {
+        pendingPreferenceStore.edit().putBoolean("receiveFailurePending", true).commit()
+        sendEvent("pendingImageSharesChanged", mapOf("failed" to true))
+      }
+    }
+  }
+
+  private fun importPendingImage(id: String, encrypted: Boolean): String = synchronized(PhotoMutationGate.lock) {
+    require(id.matches(Regex("[0-9a-f-]{36}"))) { "Invalid pending image identifier" }
+    val staged = pendingShares.consume(id) ?: error("Pending image is no longer available")
+    val modeKey = "importEncrypted.$id"
+    val mode = if (pendingPreferenceStore.contains(modeKey)) {
+      pendingPreferenceStore.getBoolean(modeKey, !encrypted)
+    } else {
+      check(pendingPreferenceStore.edit().putBoolean(modeKey, encrypted).commit()) { "Unable to retain import setting" }
+      encrypted
+    }
+    require(mode == encrypted) { "Import setting changed; retry with the setting used for this request" }
+
+    val gallery = galleryDir()
+    check(gallery.exists() || gallery.mkdirs()) { "Private gallery unavailable" }
+    val leaf = "photo-share-$id.${if (encrypted) "scv" else "jpg"}"
+    val source = File(java.net.URI(staged.uri))
+    check(source.canonicalFile.parentFile == File(context.filesDir, ".secret-camera-pending").canonicalFile && source.isFile) {
+      "Owned pending image is unavailable"
+    }
+    val temp = File(context.filesDir, ".pending-import-$id.jpg")
+    try {
+      if (encrypted) captureCoordinator().prepareCaptureVault()
+      check(!temp.exists() || temp.delete()) { "Unable to clear owned import staging" }
+      source.inputStream().use { input -> temp.outputStream().use { output ->
+        input.copyTo(output); output.fd.sync()
+      } }
+      check(temp.length() == source.length() && temp.readBytes().contentEquals(source.readBytes())) {
+        "Owned import staging verification failed"
+      }
+      EncryptedPhotoCodec(context.filesDir, keys, trustedOutputDir = gallery)
+        .importImage(temp.path, leaf, encrypted)
+      leaf
+    } finally { temp.delete() }
+  }
+
 
   private val context get() = appContext.reactContext!!
 
@@ -62,7 +148,9 @@ class PhotoVaultModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("PhotoVault")
+    Events("pendingImageSharesChanged")
     OnCreate {
+      appContext.currentActivity?.intent?.let(::receiveShare)
       cleanViewCache()
       synchronized(cleanupLifecycleLock) {
         queueShareCleanup()
@@ -70,12 +158,33 @@ class PhotoVaultModule : Module() {
       }
     }
     OnActivityEntersForeground { queueShareCleanup() }
+    OnNewIntent { intent -> receiveShare(intent) }
     OnDestroy {
       synchronized(cleanupLifecycleLock) {
         cleanupDestroyed = true
         cleanupHandler.removeCallbacks(cleanupTask)
         cleanupExecutor.shutdown()
+        pendingShareExecutor.shutdown()
       }
+    }
+
+    AsyncFunction("listPendingImageShares") {
+      pendingShares.list().map { mapOf("id" to it.id, "uri" to it.uri, "mimeType" to it.mimeType) }
+    }
+    AsyncFunction("consumePendingImageShare") { id: String ->
+      pendingShares.consume(id)?.let { mapOf("id" to it.id, "uri" to it.uri, "mimeType" to it.mimeType) }
+    }
+    AsyncFunction("acknowledgePendingImageShare") { id: String ->
+      pendingShares.acknowledge(id)
+      pendingPreferenceStore.edit().remove("importEncrypted.$id").apply()
+    }
+    AsyncFunction("consumePendingImageShareFailure") {
+      val failed = pendingPreferenceStore.getBoolean("receiveFailurePending", false)
+      if (failed) check(pendingPreferenceStore.edit().remove("receiveFailurePending").commit())
+      failed
+    }
+    AsyncFunction("importPendingImageShare") { id: String, encryptAutomatically: Boolean ->
+      mapOf("filename" to importPendingImage(id, encryptAutomatically))
     }
 
     AsyncFunction("initializeNewVault") {

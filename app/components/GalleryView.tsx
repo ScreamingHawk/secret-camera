@@ -7,6 +7,7 @@ import {
   FlatList,
   Image,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -19,11 +20,17 @@ import ImageView from './ImageView';
 interface GalleryViewProps {
   onClose: () => void;
   onShareState: (active: boolean) => void;
+  refreshKey?: number;
+  importNotice?: string;
+  onRetryImports?: () => void;
 }
 
 export default function GalleryView({
   onClose,
   onShareState,
+  refreshKey = 0,
+  importNotice = '',
+  onRetryImports,
 }: GalleryViewProps) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
@@ -42,7 +49,7 @@ export default function GalleryView({
     return () => {
       mounted.current = false;
     };
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener(
@@ -66,9 +73,9 @@ export default function GalleryView({
       const files = await FileSystem.readDirectoryAsync(
         APP_DIRECTORY.SECRET_CAMERA
       );
-      const photoUris = files.map(
-        (filename) => `${APP_DIRECTORY.SECRET_CAMERA}/${filename}`
-      );
+      const photoUris = files
+        .filter((filename) => /\.(?:jpe?g|scv)$/i.test(filename))
+        .map((filename) => `${APP_DIRECTORY.SECRET_CAMERA}/${filename}`);
       if (mounted.current) setPhotos(photoUris.reverse());
     } catch (error) {
       console.error('Unable to load gallery');
@@ -139,6 +146,14 @@ export default function GalleryView({
       >
         <Ionicons name="close" size={32} color="black" />
       </TouchableOpacity>
+      {importNotice !== '' && (
+        <View style={styles.importNotice}>
+          <Text>{importNotice}</Text>
+          <TouchableOpacity onPress={onRetryImports} disabled={!onRetryImports}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <FlatList
         data={photos}
         numColumns={numColumns}
@@ -212,6 +227,8 @@ const styles = StyleSheet.create({
   imageContainer: {
     padding: 2,
   },
+  importNotice: { paddingHorizontal: 16, paddingBottom: 8 },
+  retryText: { color: '#2466a2', fontWeight: '600', paddingTop: 4 },
   image: {
     borderRadius: 8,
   },

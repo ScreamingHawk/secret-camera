@@ -17,6 +17,36 @@ internal class EncryptedPhotoCodec(
   private val trustedOutputDir: File = filesDir,
   private val afterPathValidation: () -> Unit = {}
 ) {
+  /** Publishes one imported JPEG with the codec's exclusive, synced publication path. */
+  internal fun importImage(sourcePath: String, destinationLeaf: String, encrypted: Boolean) = withPinnedRoots { root, outputRoot ->
+    val source = validatePath(sourcePath, mustExist = true)
+    require(destinationLeaf.endsWith(if (encrypted) ".scv" else ".jpg", ignoreCase = true)) { "Invalid import destination" }
+    val original = readBounded(File(root, source.name), MAX_PLAINTEXT_BYTES)
+    val initialDestination = File(outputRoot, destinationLeaf)
+    if (initialDestination.exists()) {
+      require((Os.lstat(initialDestination.path).st_mode and OsConstants.S_IFMT) == OsConstants.S_IFREG) { "Import destination is not a regular file" }
+    } else if (encrypted) {
+      val cipher = Cipher.getInstance(TRANSFORMATION)
+      cipher.init(Cipher.ENCRYPT_MODE, keys.requireExistingKey())
+      val nonce = cipher.iv
+      require(nonce != null && nonce.size == NONCE_BYTES) { "Unsupported AndroidKeyStore GCM nonce" }
+      cipher.updateAAD(HEADER)
+      try { publishExclusive(outputRoot, destinationLeaf, HEADER + nonce + cipher.doFinal(original)) }
+      catch (failure: Exception) { if (!File(outputRoot, destinationLeaf).exists()) throw failure }
+    } else {
+      try { publishExclusive(outputRoot, destinationLeaf, original) }
+      catch (failure: Exception) { if (!File(outputRoot, destinationLeaf).exists()) throw failure }
+    }
+    val destination = validateLeaf(outputRoot, destinationLeaf, true)
+    require((Os.lstat(destination.path).st_mode and OsConstants.S_IFMT) == OsConstants.S_IFREG) { "Import destination is not a regular file" }
+    val actual = if (encrypted) decryptAuthenticated(readBounded(destination, MAX_ENVELOPE_BYTES))
+      else readBounded(destination, MAX_PLAINTEXT_BYTES)
+    require(actual.contentEquals(original)) { "Existing import destination does not match staged image" }
+    val fd = Os.open(destination.path, OsConstants.O_RDONLY or OsConstants.O_CLOEXEC or OsConstants.O_NOFOLLOW, 0)
+    try { Os.fsync(fd) } finally { Os.close(fd) }
+    ParcelFileDescriptor.fromFd(outputRoot.name.toInt()).use { Os.fsync(it.fileDescriptor) }
+  }
+
   fun encrypt(inputPath: String, outputPath: String) = withPinnedRoots { root, outputRoot ->
     val input = validatePath(inputPath, mustExist = true)
     val output = validateOutputPath(outputPath)

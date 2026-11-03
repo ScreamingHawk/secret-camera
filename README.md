@@ -19,6 +19,8 @@ Uninstalling the app removes its private photos and key. Moving to another devic
 
 Sharing decrypts a selected photo into a conventional JPEG in the app cache and grants the selected share target read access. The app attempts to remove unhanded exports and expires handed-off exports after about one hour, but cache eviction/cleanup is best-effort, not secure erasure; recipients can retain copies. Viewing also uses temporary plaintext cache files, cleaned on module startup. Do not share a photo unless you accept that the receiving app may keep it.
 
+Secret Camera can also receive Android JPEG image shares. Received bytes are copied (not moved or deleted) into bounded app-private pending storage and are not shown or committed to the gallery until successful app authentication and settings load. Incoming imports preserve the original JPEG bytes and orientation metadata. The import uses the current persisted “Encrypt automatically” setting: encrypted imports are authenticated ciphertext; disabled imports are ordinary app-private JPEGs. This import does not change the setting and never falls back from encryption to plaintext. Only valid JPEGs up to 32 MiB per image are accepted; the pending area is capped at 20 items and 64 MiB total. PNG, WebP, GIF, corrupt images and oversized files are rejected without changing the sender original. Pending copies are removed only after the gallery file has been verified and durably published.
+
 ## Getting Started
 
 1. Install dependencies and set up development environment

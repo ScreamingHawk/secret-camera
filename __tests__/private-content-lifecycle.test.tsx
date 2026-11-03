@@ -8,6 +8,14 @@ jest.mock('expo-camera', () => ({
   useCameraPermissions: () => [{ granted: true }, jest.fn()],
 }));
 jest.mock('../app/utils/security', () => ({ authenticateUser: jest.fn() }));
+jest.mock('../modules/photo-vault/src/PhotoVault', () => ({
+  __esModule: true,
+  default: {
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+    listPendingImageShares: jest.fn(async () => []),
+    consumePendingImageShareFailure: jest.fn(async () => false),
+  },
+}));
 jest.mock('../app/components/CameraView', () => () => null);
 jest.mock('../app/components/SettingsView', () => () => null);
 jest.mock('../app/components/GalleryView', () => {
