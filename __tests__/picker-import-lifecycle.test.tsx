@@ -9,6 +9,7 @@ let mockPickerResult: any;
 let mockPreference = true;
 let mockPending: Array<{ id: string; uri: string; mimeType: string }> = [];
 let mockGalleryProps: any;
+let mockStagedMime: string | null = null;
 jest.mock('expo-camera', () => ({
   useCameraPermissions: () => [{ granted: true }, jest.fn()],
 }));
@@ -36,10 +37,13 @@ jest.mock('../modules/photo-vault/src/PhotoVault', () => ({
     ),
     stagePickedImage: jest.fn(async (uri: string) => {
       if (uri.includes('reject')) throw new Error('synthetic rejected item');
+      const png = uri.toLowerCase().endsWith('.png');
+      const mimeType = png ? 'image/png' : 'image/jpeg';
+      mockStagedMime = mimeType;
       mockPending.push({
         id: `id-${uri}`,
-        uri: 'file:///private/pending.jpg',
-        mimeType: 'image/jpeg',
+        uri: `file:///private/pending.${png ? 'png' : 'jpg'}`,
+        mimeType,
       });
     }),
     importPendingImageShare: jest.fn(
@@ -58,10 +62,16 @@ jest.mock('../app/components/SettingsView', () => () => null);
 jest.mock('../app/components/AboutView', () => () => null);
 jest.mock('../app/components/GalleryView', () => (props: any) => {
   mockGalleryProps = props;
+  const { Text, TouchableOpacity, View } = require('react-native');
   return require('react').createElement(
-    require('react-native').Text,
+    View,
     null,
-    props.importNotice
+    require('react').createElement(
+      TouchableOpacity,
+      { onPress: props.onImportPhotos },
+      require('react').createElement(Text, null, 'Import photos')
+    ),
+    require('react').createElement(Text, null, props.importNotice)
   );
 });
 
@@ -83,6 +93,7 @@ beforeEach(() => {
   mockPreference = true;
   mockPending = [];
   mockGalleryProps = undefined;
+  mockStagedMime = null;
   changeState = () => {};
   jest.spyOn(AppState, 'addEventListener').mockImplementation(((
     _event: string,
@@ -103,13 +114,25 @@ async function selectAndWait() {
   await act(async () => {
     renderer = TestRenderer.create(<Index />);
   });
+  const galleryButton = () =>
+    renderer.root
+      .findAllByType(TouchableOpacity)
+      .find((node) =>
+        node
+          .findAllByType(Text)
+          .some((text) => text.props.children === 'View Gallery')
+      )!;
+  await act(async () => {
+    galleryButton().props.onPress();
+    await Promise.resolve();
+  });
   const importButton = () =>
     renderer.root
       .findAllByType(TouchableOpacity)
       .find((node) =>
         node
           .findAllByType(Text)
-          .some((text) => text.props.children === 'Import JPEG Photos')
+          .some((text) => text.props.children === 'Import photos')
       )!;
   await act(async () => {
     importButton().props.onPress();
@@ -139,6 +162,25 @@ test.each([true, false])(
     expect(vault.acknowledgePendingImageShare).toHaveBeenCalledTimes(1);
   }
 );
+
+test('PNG selection retains PNG MIME while using the existing pending import', async () => {
+  mockPickerResult = {
+    canceled: false,
+    assets: [
+      { uri: 'file:///synthetic/transparent.png', mimeType: 'image/png' },
+    ],
+  };
+  const renderer = await selectAndWait();
+  expect(vault.stagePickedImage).toHaveBeenCalledWith(
+    'file:///synthetic/transparent.png'
+  );
+  expect(mockStagedMime).toBe('image/png');
+  expect(vault.importPendingImageShare).toHaveBeenCalledWith(
+    expect.any(String),
+    true
+  );
+  renderer.unmount();
+});
 
 test('picker cancellation stages and imports nothing', async () => {
   mockPickerResult = { canceled: true, assets: null };
@@ -184,12 +226,23 @@ test.each([true, false])(
     await act(async () => {
       renderer = TestRenderer.create(<Index />);
     });
+    const galleryButton = renderer.root
+      .findAllByType(TouchableOpacity)
+      .find((node) =>
+        node
+          .findAllByType(Text)
+          .some((text) => text.props.children === 'View Gallery')
+      )!;
+    await act(async () => {
+      galleryButton.props.onPress();
+      await Promise.resolve();
+    });
     const importButton = renderer.root
       .findAllByType(TouchableOpacity)
       .find((node) =>
         node
           .findAllByType(Text)
-          .some((text) => text.props.children === 'Import JPEG Photos')
+          .some((text) => text.props.children === 'Import photos')
       )!;
     await act(async () => {
       importButton.props.onPress();

@@ -76,7 +76,7 @@ export default function GalleryView({
         APP_DIRECTORY.SECRET_CAMERA
       );
       const photoUris = files
-        .filter((filename) => /\.(?:jpe?g|scv)$/i.test(filename))
+        .filter((filename) => /\.(?:jpe?g|png|scv)$/i.test(filename))
         .map((filename) => `${APP_DIRECTORY.SECRET_CAMERA}/${filename}`);
       if (mounted.current) setPhotos(photoUris.reverse());
     } catch (error) {
@@ -155,10 +155,7 @@ export default function GalleryView({
       >
         <Text style={styles.importButtonText}>Import photos</Text>
       </TouchableOpacity>
-      <Text style={styles.importHelp}>
-        Imports valid JPEG images up to 32 MiB each. Originals remain unchanged
-        in their existing storage.
-      </Text>
+
       {importNotice !== '' && (
         <View style={styles.importNotice}>
           <Text>{importNotice}</Text>
@@ -250,7 +247,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   importButtonText: { color: 'white', fontWeight: '600' },
-  importHelp: { paddingHorizontal: 16, paddingBottom: 8, color: '#444' },
+
   retryText: { color: '#2466a2', fontWeight: '600', paddingTop: 4 },
   image: {
     borderRadius: 8,

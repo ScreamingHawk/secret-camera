@@ -32,7 +32,7 @@ internal class LegacyPhotoMigrator(
 
   private fun eligibleSources(): List<File> = gallery.listFiles()?.filter {
     !it.isSymbolicLink() && it.isFile &&
-      (it.name.endsWith(".jpg", true) || it.name.endsWith(".jpeg", true))
+      (it.name.endsWith(".jpg", true) || it.name.endsWith(".jpeg", true) || it.name.endsWith(".png", true))
   } ?: error("Gallery unavailable")
 
   private fun File.isSymbolicLink(): Boolean = try { android.system.Os.lstat(path).let { (it.st_mode and android.system.OsConstants.S_IFMT) == android.system.OsConstants.S_IFLNK } } catch (_: Exception) { true }

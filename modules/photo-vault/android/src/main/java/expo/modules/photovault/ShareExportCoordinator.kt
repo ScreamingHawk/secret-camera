@@ -10,7 +10,7 @@ internal class ShareExportCoordinator(
 ) {
   private val lock = Any()
   private val active = mutableSetOf<String>()
-  private val leaf = Regex("share-[0-9a-f-]{36}\\.jpg")
+  private val leaf = Regex("share-[0-9a-f-]{36}\\.(jpg|png)")
   private fun sidecar(file: File) = File(root, file.name + ".expiry")
   private fun owned(file: File): Boolean = file.parentFile?.canonicalFile == root.canonicalFile && leaf.matches(file.name) && !java.nio.file.Files.isSymbolicLink(file.toPath())
   private fun expiry(file: File): Long {

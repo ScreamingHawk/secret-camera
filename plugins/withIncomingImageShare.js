@@ -24,41 +24,25 @@ module.exports = function withIncomingImageShare(config) {
       'android.intent.action.SEND',
       'android.intent.action.SEND_MULTIPLE',
     ]) {
-      const matches = activity['intent-filter'].filter(
-        (filter) =>
-          filter.action?.some((entry) => entry.$['android:name'] === action) &&
-          filter.data?.some(
-            (entry) => entry.$['android:mimeType'] === 'image/jpeg'
-          )
-      );
-      if (matches.length) {
-        let kept = false;
-        activity['intent-filter'] = activity['intent-filter'].filter(
-          (filter) => {
-            const match =
-              filter.action?.some(
-                (entry) => entry.$['android:name'] === action
-              ) &&
-              filter.data?.some(
-                (entry) => entry.$['android:mimeType'] === 'image/jpeg'
-              );
-            if (!match) return true;
-            if (!kept) {
-              kept = true;
-              return true;
-            }
-            return false;
-          }
+      for (const mimeType of ['image/jpeg', 'image/png']) {
+        const matches = activity['intent-filter'].filter(
+          (filter) =>
+            filter.action?.some(
+              (entry) => entry.$['android:name'] === action
+            ) &&
+            filter.data?.some(
+              (entry) => entry.$['android:mimeType'] === mimeType
+            )
         );
-        continue;
+        if (matches.length) continue;
+        activity['intent-filter'].push({
+          action: [{ $: { 'android:name': action } }],
+          category: [
+            { $: { 'android:name': 'android.intent.category.DEFAULT' } },
+          ],
+          data: [{ $: { 'android:mimeType': mimeType } }],
+        });
       }
-      activity['intent-filter'].push({
-        action: [{ $: { 'android:name': action } }],
-        category: [
-          { $: { 'android:name': 'android.intent.category.DEFAULT' } },
-        ],
-        data: [{ $: { 'android:mimeType': 'image/jpeg' } }],
-      });
     }
     activity.$['android:launchMode'] = 'singleTask';
     return mod;

@@ -44,11 +44,13 @@ export default function AboutView({ onClose }: AboutViewProps) {
           receiving app may retain.
         </Text>
         <Text style={styles.description}>
-          Android photo-picker imports currently accept valid JPEG images only.
-          They copy an image into the private gallery; the original remains in
-          its existing gallery or storage and is not made private by importing.
-          The current persisted automatic-encryption setting is used after
-          authentication.
+          Android photo-picker and incoming-share imports accept valid JPEG and
+          PNG images up to 32 MiB each (20 pending items/64 MiB total). They
+          copy original image bytes into the private gallery without format
+          conversion; PNG transparency is retained. The source remains in its
+          existing gallery or storage and is not made private by importing. The
+          current persisted automatic-encryption setting is used after
+          authentication. WebP, GIF and other formats are not supported.
         </Text>
         <Text style={styles.subtitle}>Features:</Text>
         <Text style={styles.feature}>• Device authentication</Text>

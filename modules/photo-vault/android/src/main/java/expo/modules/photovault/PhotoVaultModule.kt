@@ -13,15 +13,23 @@ private const val DELIVERY_PROOF = "expo.modules.photovault.delivery-proof"
 internal data class PendingImageImportTarget(val filename: String, val encrypted: Boolean)
 
 /** Existing committed format wins; otherwise a pre-commit retry uses the current persisted setting. */
-internal fun selectPendingImageImportTarget(gallery: File, id: String, requestedEncrypted: Boolean): PendingImageImportTarget {
+internal fun selectPendingImageImportTarget(gallery: File, id: String, requestedEncrypted: Boolean, mimeType: String = "image/jpeg"): PendingImageImportTarget {
   require(id.matches(Regex("[0-9a-f-]{36}"))) { "Invalid pending image identifier" }
-  val plain = File(gallery, "photo-share-$id.jpg")
-  val encrypted = File(gallery, "photo-share-$id.scv")
-  require(!(plain.exists() && encrypted.exists())) { "Conflicting import destinations exist" }
+  require(mimeType == "image/jpeg" || mimeType == "image/png") { "Unsupported pending image format" }
+  val extension = if (mimeType == "image/png") "png" else "jpg"
+  val plain = File(gallery, "photo-share-$id.$extension")
+  val encryptedNamed = File(gallery, "photo-share-$id.$extension.scv")
+  val legacyEncrypted = File(gallery, "photo-share-$id.scv")
+  val otherExtension = if (extension == "png") "jpg" else "png"
+  require(!File(gallery, "photo-share-$id.$otherExtension").exists() &&
+    !File(gallery, "photo-share-$id.$otherExtension.scv").exists() &&
+    (mimeType == "image/jpeg" || !legacyEncrypted.exists())) { "Conflicting import destinations exist" }
+  val encrypted = if (encryptedNamed.exists()) encryptedNamed else legacyEncrypted
+  require(!(plain.exists() && encrypted.exists()) && !(encryptedNamed.exists() && legacyEncrypted.exists())) { "Conflicting import destinations exist" }
   return when {
     encrypted.exists() -> PendingImageImportTarget(encrypted.name, true)
     plain.exists() -> PendingImageImportTarget(plain.name, false)
-    requestedEncrypted -> PendingImageImportTarget(encrypted.name, true)
+    requestedEncrypted -> PendingImageImportTarget(if (mimeType == "image/png") encryptedNamed.name else legacyEncrypted.name, true)
     else -> PendingImageImportTarget(plain.name, false)
   }
 }
@@ -101,14 +109,14 @@ class PhotoVaultModule : Module() {
     val staged = pendingShares.consume(id) ?: error("Pending image is no longer available")
     val gallery = galleryDir()
     check(gallery.exists() || gallery.mkdirs()) { "Private gallery unavailable" }
-    val target = selectPendingImageImportTarget(gallery, id, encrypted)
+    val target = selectPendingImageImportTarget(gallery, id, encrypted, staged.mimeType)
     val committedEncrypted = target.encrypted
     val leaf = target.filename
     val source = File(java.net.URI(staged.uri))
     check(source.canonicalFile.parentFile == File(context.filesDir, ".secret-camera-pending").canonicalFile && source.isFile) {
       "Owned pending image is unavailable"
     }
-    val temp = File(context.filesDir, ".pending-import-$id.jpg")
+    val temp = File(context.filesDir, ".pending-import-$id.tmp")
     try {
       if (committedEncrypted) captureCoordinator().prepareCaptureVault()
       check(!temp.exists() || temp.delete()) { "Unable to clear owned import staging" }
@@ -132,7 +140,7 @@ class PhotoVaultModule : Module() {
 
   private fun cleanViewCache() {
     val cache = File(context.cacheDir, "photo-vault-views")
-    cache.listFiles()?.filter { it.name.matches(Regex("view-[0-9a-f-]{36}\\.jpg")) }?.forEach { it.delete() }
+    cache.listFiles()?.filter { it.name.matches(Regex("view-[0-9a-f-]{36}\\.(jpg|png)")) }?.forEach { it.delete() }
   }
   private fun codec() = EncryptedPhotoCodec(context.filesDir, keys)
   private fun galleryDir() = File(context.filesDir, ".secret-camera")

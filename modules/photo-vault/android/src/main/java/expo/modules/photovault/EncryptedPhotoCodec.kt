@@ -17,10 +17,10 @@ internal class EncryptedPhotoCodec(
   private val trustedOutputDir: File = filesDir,
   private val afterPathValidation: () -> Unit = {}
 ) {
-  /** Publishes one imported JPEG with the codec's exclusive, synced publication path. */
+  /** Publishes one imported JPEG or PNG with the codec's exclusive, synced publication path. */
   internal fun importImage(sourcePath: String, destinationLeaf: String, encrypted: Boolean) = withPinnedRoots { root, outputRoot ->
     val source = validatePath(sourcePath, mustExist = true)
-    require(destinationLeaf.endsWith(if (encrypted) ".scv" else ".jpg", ignoreCase = true)) { "Invalid import destination" }
+    require(if (encrypted) destinationLeaf.endsWith(".scv", ignoreCase = true) else destinationLeaf.endsWith(".jpg", ignoreCase = true) || destinationLeaf.endsWith(".png", ignoreCase = true)) { "Invalid import destination" }
     val original = readBounded(File(root, source.name), MAX_PLAINTEXT_BYTES)
     val initialDestination = File(outputRoot, destinationLeaf)
     if (initialDestination.exists()) {
@@ -80,8 +80,10 @@ internal class EncryptedPhotoCodec(
 
   internal fun migrateLegacyFile(sourceLeaf: String, beforeSourceRemoval: () -> Unit = {}): String = withPinnedRoots { root, outputRoot ->
     require(root == outputRoot) { "Migration source and destination must share the gallery root" }
-    require((sourceLeaf.endsWith(".jpg", ignoreCase = true) || sourceLeaf.endsWith(".jpeg", ignoreCase = true)) && File(sourceLeaf).name == sourceLeaf && sourceLeaf != "." && sourceLeaf != "..") { "Expected JPEG leaf name" }
-    val destination = "legacy-${java.security.MessageDigest.getInstance("SHA-256").digest(sourceLeaf.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }}.scv"
+    val isPng = sourceLeaf.endsWith(".png", ignoreCase = true)
+    require((sourceLeaf.endsWith(".jpg", ignoreCase = true) || sourceLeaf.endsWith(".jpeg", ignoreCase = true) || isPng) && File(sourceLeaf).name == sourceLeaf && sourceLeaf != "." && sourceLeaf != "..") { "Expected JPEG or PNG leaf name" }
+    val suffix = if (isPng) ".png.scv" else ".scv"
+    val destination = "legacy-${java.security.MessageDigest.getInstance("SHA-256").digest(sourceLeaf.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }}$suffix"
     val source = File(root, sourceLeaf)
     val existingTarget = File(root, destination)
     require(source.exists()) { "Migration source is absent" }
@@ -117,7 +119,8 @@ internal class EncryptedPhotoCodec(
   internal fun decryptGalleryFile(sourceLeaf: String, beforeSourceRemoval: () -> Unit = {}): String = withPinnedRoots { root, outputRoot ->
     require(root == outputRoot) { "Conversion source and destination must share the gallery root" }
     require(sourceLeaf.endsWith(".scv", ignoreCase = true) && File(sourceLeaf).name == sourceLeaf && sourceLeaf != "." && sourceLeaf != "..") { "Expected encrypted photo leaf name" }
-    val destination = "decrypted-${java.security.MessageDigest.getInstance("SHA-256").digest(sourceLeaf.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }}.jpg"
+    val extension = if (sourceLeaf.endsWith(".png.scv", true)) "png" else "jpg"
+    val destination = "decrypted-${java.security.MessageDigest.getInstance("SHA-256").digest(sourceLeaf.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }}.$extension"
     val source = validateLeaf(root, sourceLeaf, true)
     val sourceStat = Os.lstat(source.path)
     require((sourceStat.st_mode and OsConstants.S_IFMT) == OsConstants.S_IFREG) { "Source must be a regular file" }
@@ -143,11 +146,13 @@ internal class EncryptedPhotoCodec(
   }
 
   fun prepareView(encryptedLeaf: String): File {
-    return prepareAuthenticated(encryptedLeaf, "view-${UUID.randomUUID()}.jpg")
+    val extension = if (encryptedLeaf.endsWith(".png.scv", true)) "png" else "jpg"
+    return prepareAuthenticated(encryptedLeaf, "view-${UUID.randomUUID()}.$extension")
   }
 
   fun prepareShare(encryptedLeaf: String): File {
-    return prepareAuthenticated(encryptedLeaf, "share-${UUID.randomUUID()}.jpg")
+    val extension = if (encryptedLeaf.endsWith(".png.scv", true)) "png" else "jpg"
+    return prepareAuthenticated(encryptedLeaf, "share-${UUID.randomUUID()}.$extension")
   }
 
   private fun prepareAuthenticated(encryptedLeaf: String, outputName: String): File {
@@ -164,7 +169,7 @@ internal class EncryptedPhotoCodec(
   }
 
   fun releaseView(token: String) {
-    require(token.matches(Regex("view-[0-9a-f-]{36}\\.jpg"))) { "Invalid private view token" }
+    require(token.matches(Regex("view-[0-9a-f-]{36}\\.(jpg|png)"))) { "Invalid private view token" }
     withPinnedOutput { root ->
       File(root, token).delete()
       Unit

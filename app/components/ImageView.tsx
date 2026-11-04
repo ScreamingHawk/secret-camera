@@ -37,6 +37,10 @@ export default function ImageView({
   const mounted = useRef(true);
   const handed = useRef(false);
   const shareError = useRef<string | null>(null);
+  const isPng =
+    uri.toLowerCase().endsWith('.png') ||
+    uri.toLowerCase().endsWith('.png.scv');
+  const shareMime = isPng ? 'image/png' : 'image/jpeg';
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -69,14 +73,14 @@ export default function ImageView({
         handed.current = true;
         await Sharing.shareAsync(exportUri, {
           dialogTitle: 'Share Image',
-          mimeType: 'image/jpeg',
-          UTI: 'public.jpeg',
+          mimeType: shareMime,
+          UTI: isPng ? 'public.png' : 'public.jpeg',
         });
       } else if (mounted.current && AppState.currentState === 'active') {
         await Sharing.shareAsync(source, {
           dialogTitle: 'Share Image',
-          mimeType: 'image/jpeg',
-          UTI: 'public.jpeg',
+          mimeType: shareMime,
+          UTI: isPng ? 'public.png' : 'public.jpeg',
         });
       }
     } catch {

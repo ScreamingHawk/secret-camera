@@ -7,6 +7,7 @@ import {
   Button,
   Image,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -88,7 +89,7 @@ export default function Index() {
       (event) => {
         if (event.failed) {
           setImportNotice(
-            'Secret Camera could not read or stage the share. It accepts valid JPEGs only (32 MiB each; pending storage 20 images/64 MiB). The sender original was not changed; check the format and size, then retry.'
+            'Secret Camera could not read or stage the share. It accepts valid JPEG or PNG images only (32 MiB each; pending storage 20 images/64 MiB). The sender original was not changed; check the format and size, then retry.'
           );
         }
         setPendingRefresh((value) => value + 1);
@@ -162,12 +163,12 @@ export default function Index() {
       }
       setPickerNotice(
         stageFailures
-          ? `${result.assets.length - stageFailures} staged; ${stageFailures} failed. Supported formats are valid JPEG images only. Original photos remain unchanged in existing storage.`
-          : 'Selected JPEGs are staged privately. Original photos remain unchanged in existing storage.'
+          ? `${result.assets.length - stageFailures} staged; ${stageFailures} failed. Supported formats are valid JPEG or PNG images. Original photos remain unchanged in existing storage.`
+          : 'Selected photos are staged privately. Original photos remain unchanged in existing storage.'
       );
       setImportNotice(
         stageFailures
-          ? `${result.assets.length - stageFailures} selected JPEG${result.assets.length - stageFailures === 1 ? '' : 's'} staged; ${stageFailures} failed. Original photos remain unchanged in existing storage.`
+          ? `${result.assets.length - stageFailures} selected image${result.assets.length - stageFailures === 1 ? '' : 's'} staged; ${stageFailures} failed. Original photos remain unchanged in existing storage.`
           : ''
       );
       // Block normal pending-share processing until every picker asset has either staged or failed.
@@ -223,7 +224,7 @@ export default function Index() {
         if (stageFailure || failed || imported.length) {
           setImportNotice(
             stageFailure
-              ? 'Secret Camera could not read or stage the share. It accepts valid JPEGs only (32 MiB each; pending storage 20 images/64 MiB). The sender original was not changed; check the format and size, then retry.'
+              ? 'Secret Camera could not read or stage the share. It accepts valid JPEG or PNG images only (32 MiB each; pending storage 20 images/64 MiB). The sender original was not changed; check the format and size, then retry.'
               : failed
                 ? `${failed} shared image${failed === 1 ? '' : 's'} could not be imported; the staged private copy remains available to retry.`
                 : ''
@@ -361,12 +362,7 @@ export default function Index() {
           }
           onRetryImports={() => setPendingRefresh((value) => value + 1)}
           onImportPhotos={
-            Platform.OS === 'android'
-              ? () => {
-                  setShowGallery(false);
-                  void choosePhotos();
-                }
-              : undefined
+            Platform.OS === 'android' ? () => void choosePhotos() : undefined
           }
         />
         {privacyCovered && (
@@ -383,74 +379,44 @@ export default function Index() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Secret Camera</Text>
-        <Image
-          source={require('../assets/images/icon.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <View style={styles.buttonContainer}>
-          {importNotice !== '' && (
-            <View>
-              <Text style={styles.message}>{importNotice}</Text>
-              <TouchableOpacity
-                style={styles.button}
-                onPress={() => setPendingRefresh((value) => value + 1)}
-              >
-                <Text style={styles.buttonText}>Retry import</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          <TouchableOpacity
-            style={styles.button}
-            disabled={isPhotoOperationRunning()}
-            onPress={() => setShowCamera(true)}
-          >
-            <Text style={styles.buttonText}>Open Camera</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.button}
-            disabled={isPhotoOperationRunning()}
-            onPress={() => setShowGallery(true)}
-          >
-            <Text style={styles.buttonText}>View Gallery</Text>
-          </TouchableOpacity>
-          {Platform.OS === 'android' && (
-            <>
-              <TouchableOpacity
-                style={styles.button}
-                disabled={isPhotoOperationRunning() || pickerInFlight.current}
-                onPress={() => void choosePhotos()}
-              >
-                <Text style={styles.buttonText}>Import JPEG Photos</Text>
-              </TouchableOpacity>
-              <Text style={styles.message}>
-                Only valid JPEG images up to 32 MiB each are accepted. Originals
-                remain unchanged in existing storage.
-              </Text>
-            </>
-          )}
-          {pickerNotice !== '' && (
-            <Text style={styles.message}>{pickerNotice}</Text>
-          )}
-          <TouchableOpacity
-            style={styles.button}
-            disabled={isPhotoOperationRunning()}
-            onPress={() => setShowSettings(true)}
-          >
-            <Text style={styles.buttonText}>Settings</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => setShowAbout(true)}
-          >
-            <Text style={styles.buttonText}>About</Text>
-          </TouchableOpacity>
-        </View>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.title}>Secret Camera</Text>
+      <Image
+        source={require('../assets/images/icon.png')}
+        style={styles.logo}
+        resizeMode="contain"
+      />
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={styles.button}
+          disabled={isPhotoOperationRunning()}
+          onPress={() => setShowCamera(true)}
+        >
+          <Text style={styles.buttonText}>Open Camera</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          disabled={isPhotoOperationRunning()}
+          onPress={() => setShowGallery(true)}
+        >
+          <Text style={styles.buttonText}>View Gallery</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.button}
+          disabled={isPhotoOperationRunning()}
+          onPress={() => setShowSettings(true)}
+        >
+          <Text style={styles.buttonText}>Settings</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => setShowAbout(true)}
+        >
+          <Text style={styles.buttonText}>About</Text>
+        </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -468,16 +434,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   content: {
-    flex: 1,
-    justifyContent: 'center',
+    flexGrow: 1,
+    justifyContent: 'flex-start',
     alignItems: 'center',
     paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 24,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#2C3E50',
-    marginBottom: 40,
+    marginBottom: 16,
     textAlign: 'center',
   },
   message: {
@@ -487,7 +455,8 @@ const styles = StyleSheet.create({
     color: '#34495E',
   },
   buttonContainer: {
-    width: '80%',
+    width: '100%',
+    maxWidth: 360,
     backgroundColor: 'white',
     padding: 20,
     borderRadius: 15,
@@ -516,6 +485,6 @@ const styles = StyleSheet.create({
   logo: {
     width: 100,
     height: 100,
-    marginBottom: 40,
+    marginBottom: 24,
   },
 });

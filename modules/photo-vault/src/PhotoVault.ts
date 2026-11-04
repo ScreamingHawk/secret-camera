@@ -22,7 +22,7 @@ export type PhotoVaultKeyLifecycle = {
   initializeNewVault(): Promise<string>;
   /** Prepares a new capture vault or refuses when initialized state lost its key. */
   prepareCaptureVault(): Promise<void>;
-  /** Explicitly migrates direct JPEGs in the trusted private gallery; never accepts a path. */
+  /** Explicitly migrates direct JPEG and PNG images in the trusted private gallery; never accepts a path. */
   migrateLegacyGalleryPhotos(): Promise<{
     migrated: number;
     remaining: number;
