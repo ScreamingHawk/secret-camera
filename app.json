@@ -2,7 +2,7 @@
   "expo": {
     "name": "Secret Camera",
     "slug": "secret-camera",
-    "version": "1.1.11",
+    "version": "1.1.12",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
@@ -17,7 +17,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "link.standen.secretcamera",
-      "versionCode": 11,
+      "versionCode": 12,
       "launchMode": "singleTask",
       "permissions": [
         "android.permission.CAMERA",
